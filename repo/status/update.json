@@ -1,0 +1,49 @@
+{
+  "/etc/issue.net": "Ubuntu 24.04.5 LTS",
+  "antiFeatures": {},
+  "apksigner": "/usr/bin/apksigner",
+  "archivePolicy0": [],
+  "commandLine": [
+    "/tmp/fd/bin/fdroid update",
+    "--pretty"
+  ],
+  "disabled": [],
+  "endTimestamp": 1793417400759,
+  "failedBuilds": {},
+  "fdroiddata": {
+    "commitId": null,
+    "isDirty": false,
+    "modifiedFiles": [],
+    "untrackedFiles": [
+      "config.yml",
+      "icon.png",
+      "metadata/it.michele.wgswitch.yml",
+      "repo/wgswitch-2.0.0.apk"
+    ]
+  },
+  "jarsigner": "/usr/lib/jvm/java-21-openjdk-amd64/bin/jarsigner",
+  "keytool": "/usr/lib/jvm/java-21-openjdk-amd64/bin/keytool",
+  "needsUpdate": [
+    "it.michele.wgswitch"
+  ],
+  "noPackages": [
+    "it.michele.wgswitch"
+  ],
+  "noUpdateCheck": [
+    "it.michele.wgswitch"
+  ],
+  "stages": {
+    "archive_old_apks archive": 1793417393638,
+    "delete_disabled_builds": 1793417393028,
+    "index.make archive": 1793417393639,
+    "index.make repo": 1793417397105,
+    "prepare_apps archive": 1793417393639,
+    "prepare_apps repo": 1793417397104,
+    "process_apks": 1793417393028,
+    "read_added_date_from_all_apks": 1793417393637,
+    "remove_apks": 1793417393637,
+    "scan_repo_files": 1793417393636
+  },
+  "startTimestamp": 1793417392000,
+  "subcommand": "update"
+}
