@@ -1,0 +1,15 @@
+Categories:
+  - Connectivity
+  - System
+License: Proprietary
+AuthorName: Michele
+SourceCode: https://github.com/thamichele/wgswitch
+IssueTracker: https://github.com/thamichele/wgswitch/issues
+
+Name: WG Switch
+Summary: Spegne e riaccende il tunnel WireGuard in base a WiFi, Bluetooth e Android Auto
+Description: |-
+  Controlla un tunnel dell'app WireGuard ufficiale: lo spegne quando sei collegato a una delle reti WiFi
+  o dei dispositivi Bluetooth scelti, oppure ad Android Auto, e lo riaccende negli altri casi.
+
+  Richiede l'app WireGuard con l'opzione "Consenti app di controllo remoto" attiva.

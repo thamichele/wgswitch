@@ -1,0 +1,9 @@
+/build
+# chiavi di firma e password: mai nel repository
+/keystore
+*.jks
+*.p12
+*.keystore
+*.pass
+*.apk
+*.idsig

@@ -1,0 +1,45 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # stessa toolchain senza Gradle usata in locale (vedi build.sh)
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q aapt dalvik-exchange zipalign apksigner
+
+      - name: Download Android API jars
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sSfLO https://repo1.maven.org/maven2/org/robolectric/android-all/15-robolectric-13954326/android-all-15-robolectric-13954326.jar
+          curl -sSfLO https://repo1.maven.org/maven2/org/robolectric/android-all/13-robolectric-9030017/android-all-13-robolectric-9030017.jar
+          unzip -q android-all-13-robolectric-9030017.jar resources.arsc AndroidManifest.xml
+          zip -q android-res-33.zip resources.arsc AndroidManifest.xml
+
+      # firmato con una chiave usa e getta: serve solo a verificare che il codice compili
+      - name: Build test APK
+        run: |
+          export ANDROID_CLASSES="$RUNNER_TEMP/android-all-15-robolectric-13954326.jar"
+          export ANDROID_RES="$RUNNER_TEMP/android-res-33.zip"
+          export KEYSTORE="$RUNNER_TEMP/test.jks" KS_PASS="$(openssl rand -hex 16)"
+          ./build.sh
+          aapt dump badging build/*.apk | head -1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wgswitch-test-apk
+          path: build/wgswitch-*.apk
+          if-no-files-found: error
