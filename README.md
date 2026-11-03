@@ -13,7 +13,10 @@ si spegne, altrimenti resta acceso. La riaccensione aspetta qualche secondo (con
 1. Installa da F-Droid, oppure copia l'APK sul telefono e aprilo consentendo l'installazione da origini sconosciute.
 2. In WireGuard: Impostazioni > attiva "Consenti app di controllo remoto".
 3. Apri WG Switch e concedi tutti i permessi nella sezione "Permessi" (posizione "Consenti sempre" compresa).
-4. Batteria: escludi l'app dall'ottimizzazione. Samsung: aggiungila ad "App mai in sospensione".
+4. Batteria: escludi l'app dall'ottimizzazione (sezione "Batteria e sospensione" dell'app). Samsung: batteria
+   dell'app "Senza restrizioni", aggiungila ad "App mai in sospensione" e disattiva "Sospendi attività app se non
+   utilizzata", altrimenti dopo qualche giorno senza aprirla Samsung la mette in sospensione e smette di funzionare.
+   Ogni ~15 minuti l'app controlla che il servizio sia vivo, lo riavvia e avvisa con una notifica se il sistema la limita.
    Xiaomi: attiva "Avvio automatico", Risparmio batteria su "Nessuna restrizione" e blocca l'app nei recenti
    (l'app mostra pulsanti dedicati quando gira su Xiaomi).
 5. Scrivi il nome del tunnel, prova "Test ON" / "Test OFF", poi scegli reti WiFi e autoradio.

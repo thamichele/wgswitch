@@ -20,6 +20,13 @@ final class Prefs {
     static final String KEY_MIN_NOTIF = "min_notification";
     static final String KEY_STATUS = "status";
     static final String KEY_LOG = "log";
+    static final String KEY_LAST_CHECK = "last_check";
+    static final String KEY_LAST_HEALTH = "last_health";
+
+    /** Chiavi di stato che non cambiano la configurazione: il servizio non deve rivalutare per queste. */
+    static boolean isStateKey(String key) {
+        return KEY_STATUS.equals(key) || KEY_LOG.equals(key) || KEY_LAST_CHECK.equals(key) || KEY_LAST_HEALTH.equals(key);
+    }
 
     private static final int MAX_LOG_LINES = 100;
 
@@ -53,6 +60,12 @@ final class Prefs {
 
     String status() { return sp.getString(KEY_STATUS, "Servizio non avviato"); }
     void setStatus(String v) { sp.edit().putString(KEY_STATUS, v).apply(); }
+
+    long lastCheck() { return sp.getLong(KEY_LAST_CHECK, 0); }
+    void setLastCheck(long v) { sp.edit().putLong(KEY_LAST_CHECK, v).apply(); }
+
+    String lastHealth() { return sp.getString(KEY_LAST_HEALTH, ""); }
+    void setLastHealth(String v) { sp.edit().putString(KEY_LAST_HEALTH, v).apply(); }
 
     String log() { return sp.getString(KEY_LOG, ""); }
 
