@@ -116,11 +116,14 @@ public class SwitchService extends Service {
         }
         running = true;
         prefs.log("Servizio avviato");
+        Watchdog.schedule(this);
+        // Stato di sospensione all'avvio: se Samsung limita l'app lo si vede subito nel registro.
+        handler.post(new Runnable() { @Override public void run() { Watchdog.check(SwitchService.this, "avvio servizio"); }});
         startWifi();
         startBluetooth();
         startCar();
         prefsListener = new SharedPreferences.OnSharedPreferenceChangeListener() { @Override public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
-            if (key == null || Prefs.KEY_STATUS.equals(key) || Prefs.KEY_LOG.equals(key)) return;
+            if (key == null || Prefs.isStateKey(key)) return;
             if (Prefs.KEY_TUNNEL.equals(key)) lastSent = null;
             if (Prefs.KEY_MIN_NOTIF.equals(key)) {
                 notifiedText = null;

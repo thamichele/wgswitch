@@ -12,5 +12,6 @@ public class BootReceiver extends BroadcastReceiver {
         // Il receiver è esportato (serve per il boot): accetta solo le azioni di sistema previste.
         if (!Intent.ACTION_BOOT_COMPLETED.equals(action) && !Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) return;
         SwitchService.start(context, "avvio da " + action);
+        Watchdog.schedule(context);
     }
 }

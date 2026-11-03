@@ -15,7 +15,6 @@ import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
@@ -64,9 +63,9 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         prefs.sp.registerOnSharedPreferenceChangeListener(listener);
-        if (!SwitchService.running && granted(Manifest.permission.BLUETOOTH_CONNECT)) {
-            SwitchService.start(this, "apertura app");
-        }
+        // Riavvia il servizio se il sistema l'ha chiuso e aggiorna lo stato di sospensione.
+        Watchdog.schedule(this);
+        Watchdog.check(this, "apertura app");
         build();
     }
 
@@ -150,18 +149,74 @@ public class MainActivity extends Activity {
                 new View.OnClickListener() { @Override public void onClick(View v) { startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); }});
         permRow("Notifiche", granted(Manifest.permission.POST_NOTIFICATIONS), "Concedi",
                 new View.OnClickListener() { @Override public void onClick(View v) { request(Manifest.permission.POST_NOTIFICATIONS); }});
-        PowerManager pm = getSystemService(PowerManager.class);
-        permRow("Esclusa dall'ottimizzazione batteria", pm.isIgnoringBatteryOptimizations(getPackageName()), "Escludi",
-                new View.OnClickListener() { @Override public void onClick(View v) { startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Uri.parse("package:" + getPackageName()))); }});
-        if (isXiaomi()) {
-            buildXiaomi();
-        } else {
-            hint("Samsung: Impostazioni > Batteria > Limiti utilizzo in background > \"App mai in sospensione\": "
-                    + "aggiungi WG Switch.");
-        }
+        buildStandby();
         root.addView(button("Apri impostazioni dell'app", new View.OnClickListener() { @Override public void onClick(View v) { startActivity(
                 new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))); }}));
+    }
+
+    // ---- Sospensione / batteria ----
+
+    private void buildStandby() {
+        header("Batteria e sospensione");
+        List<String> problems = Health.problems(this);
+        if (!problems.isEmpty()) {
+            TextView warn = text("⚠  Il sistema può fermare WG Switch dopo qualche giorno: sistema le voci con ✗.", 15, true);
+            root.addView(warn, matchWrap(dp(4)));
+        }
+        permRow("Batteria: esclusa dall'ottimizzazione", Health.ignoringBatteryOptimizations(this), "Escludi",
+                new View.OnClickListener() { @Override public void onClick(View v) { startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:" + getPackageName()))); }});
+        permRow("Uso in background non limitato", !Health.backgroundRestricted(this), "Apri",
+                new View.OnClickListener() { @Override public void onClick(View v) { openAppBattery(); }});
+        permRow("\"Sospendi attività app se non utilizzata\" disattivato", Health.hibernationDisabled(this), "Apri",
+                new View.OnClickListener() { @Override public void onClick(View v) { openOrAppDetails(new Intent(Intent.ACTION_AUTO_REVOKE_PERMISSIONS,
+                        Uri.parse("package:" + getPackageName()))); }});
+        int bucket = Health.standbyBucket(this);
+        permRow("Stato standby di sistema: " + Health.bucketName(bucket), !Health.bucketLimited(bucket), null, null);
+        long last = prefs.lastCheck();
+        hint("Ultimo controllo automatico: " + (last == 0 ? "mai" :
+                new java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.ITALY).format(new java.util.Date(last)))
+                + ". Ogni 15 minuti circa l'app verifica che il servizio sia vivo e lo riavvia se serve.");
+        if (isXiaomi()) {
+            buildXiaomi();
+        } else if (Health.isSamsung()) {
+            buildSamsung();
+        }
+    }
+
+    private void buildSamsung() {
+        hint("Samsung mette \"in sospensione\" le app che non apri per qualche giorno, anche se lavorano in background. "
+                + "Per evitarlo:");
+        hint("1. Batteria dell'app: scegli \"Senza restrizioni\".");
+        root.addView(button("Apri batteria dell'app", new View.OnClickListener() { @Override public void onClick(View v) { openAppBattery(); }}));
+        hint("2. Impostazioni > Assistenza dispositivo > Batteria > Limiti utilizzo in background: "
+                + "aggiungi WG Switch ad \"App mai in sospensione\" e controlla che non sia tra le app in sospensione "
+                + "o in sospensione profonda. Se vuoi, disattiva \"Metti in sospensione le app non utilizzate\".");
+        root.addView(button("Apri Limiti utilizzo in background", new View.OnClickListener() { @Override public void onClick(View v) {
+            openFirst(new Intent().setComponent(new ComponentName("com.samsung.android.lool",
+                            "com.samsung.android.sm.battery.ui.BatteryActivity")),
+                    new Intent("com.samsung.android.sm.ACTION_BATTERY"),
+                    new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+        }}));
+        hint("3. Impostazioni dell'app: disattiva \"Sospendi attività app se non utilizzata\".");
+    }
+
+    /** Pagina batteria dell'app (Senza restrizioni / Ottimizzata / Limitata), oppure le info dell'app. */
+    private void openAppBattery() {
+        openOrAppDetails(new Intent("android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL",
+                Uri.parse("package:" + getPackageName())));
+    }
+
+    /** Apre il primo intent disponibile; in ultima istanza le impostazioni dell'app. */
+    private void openFirst(Intent... intents) {
+        for (Intent i : intents) {
+            try {
+                startActivity(i);
+                return;
+            } catch (RuntimeException ignored) {
+            }
+        }
+        openOrAppDetails(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
     }
 
     private void buildTunnel() {
