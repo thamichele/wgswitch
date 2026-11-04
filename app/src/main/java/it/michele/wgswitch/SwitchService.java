@@ -62,6 +62,13 @@ public class SwitchService extends Service {
     static volatile List<String> currentBt = new ArrayList<>();
     static volatile boolean currentCar;
     static volatile boolean running;
+    /** WiFi connesso ma nome non leggibile: di solito manca la posizione (o "Consenti sempre"). */
+    static volatile boolean ssidUnreadable;
+    /** WireGuard non ha acceso/spento la VPN nemmeno dopo un secondo tentativo. */
+    static volatile boolean wireguardNotResponding;
+
+    /** Secondi di attesa prima di verificare che WireGuard abbia eseguito il comando. */
+    private static final int VERIFY_DELAY_S = 10;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Prefs prefs;
@@ -161,6 +168,8 @@ public class SwitchService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        ssidUnreadable = false;
+        wireguardNotResponding = false;
         handler.removeCallbacksAndMessages(null);
         if (wifiCallback != null) cm.unregisterNetworkCallback(wifiCallback);
         if (btReceiver != null) unregisterReceiver(btReceiver);
@@ -194,6 +203,7 @@ public class SwitchService extends Service {
                 if (known && (ssid == null ? old == null : ssid.equals(old))) return;
                 if (ssid != null) prefs.log("WiFi connesso: " + ssid);
                 else prefs.log("WiFi connesso ma SSID non leggibile: controlla posizione e permessi");
+                updateSsidReadable();
                 evaluate();
             }
 
@@ -202,10 +212,23 @@ public class SwitchService extends Service {
                 if (!wifi.containsKey(network)) return;
                 String old = wifi.remove(network);
                 prefs.log("WiFi disconnesso" + (old != null ? ": " + old : ""));
+                updateSsidReadable();
                 evaluate();
             }
         };
         cm.registerNetworkCallback(request, wifiCallback, handler);
+    }
+
+    /** Segnala (registro + notifica) quando il nome del WiFi diventa illeggibile, cioè le reti di eccezione non funzionano. */
+    private void updateSsidReadable() {
+        boolean unreadable = wifi.containsValue(null);
+        if (unreadable == ssidUnreadable) return;
+        ssidUnreadable = unreadable;
+        if (unreadable) {
+            prefs.log("PERMESSI: non riesco a leggere il nome del WiFi, le reti di eccezione non funzionano");
+            Health.alert(this, "Non riesco a leggere il nome della rete WiFi: controlla Posizione \"Consenti sempre\" "
+                    + "e che la geolocalizzazione sia attiva.");
+        }
     }
 
     static String cleanSsid(String s) {
@@ -408,10 +431,16 @@ public class SwitchService extends Service {
         }
     }
 
+    private Runnable pendingVerify;
+
     private void send(boolean up, String why) {
         if (lastSent != null && lastSent == up) return;
         if (!WireGuard.permissionGranted(this)) {
-            if (!permissionWarned) prefs.log("Manca il permesso per controllare WireGuard");
+            if (!permissionWarned) {
+                prefs.log("PERMESSI: manca il permesso per controllare WireGuard, il tunnel non viene " + (up ? "acceso" : "spento"));
+                Health.alert(this, "Manca il permesso \"Controllo di WireGuard\": il tunnel non viene "
+                        + (up ? "acceso" : "spento") + ". Apri l'app e concedilo.");
+            }
             permissionWarned = true;
             return;
         }
@@ -419,6 +448,38 @@ public class SwitchService extends Service {
         WireGuard.setTunnel(this, prefs.tunnel(), up);
         lastSent = up;
         prefs.log((up ? "Tunnel ACCESO" : "Tunnel SPENTO") + " (" + why + ")");
+        scheduleVerify(up, false);
+    }
+
+    /** Dopo qualche secondo controlla che la VPN sia davvero accesa/spenta; altrimenti riprova una volta e avvisa. */
+    private void scheduleVerify(final boolean up, final boolean retried) {
+        if (pendingVerify != null) handler.removeCallbacks(pendingVerify);
+        pendingVerify = new Runnable() { @Override public void run() {
+            pendingVerify = null;
+            if (!running || lastSent == null || lastSent != up) return;
+            boolean vpn = Health.vpnActive(SwitchService.this);
+            if (vpn == up) {
+                if (retried) prefs.log("Verifica: al secondo tentativo WireGuard ha eseguito il comando");
+                if (wireguardNotResponding) {
+                    wireguardNotResponding = false;
+                    Health.clearAlert(SwitchService.this);
+                }
+                return;
+            }
+            String state = vpn ? "ancora accesa" : "ancora spenta";
+            if (!retried) {
+                prefs.log("Verifica: la VPN risulta " + state + ", invio di nuovo il comando a WireGuard");
+                WireGuard.setTunnel(SwitchService.this, prefs.tunnel(), up);
+                scheduleVerify(up, true);
+            } else {
+                wireguardNotResponding = true;
+                prefs.log("ATTENZIONE: WireGuard non esegue i comandi (VPN " + state + "). Controlla il nome del tunnel, "
+                        + "\"Consenti app di controllo remoto\" e che WireGuard non sia in sospensione");
+                Health.alert(SwitchService.this, "WireGuard non ha " + (up ? "acceso" : "spento") + " il tunnel. "
+                        + "Controlla il nome del tunnel e che l'app WireGuard non sia in sospensione (Batteria: Senza restrizioni).");
+            }
+        }};
+        handler.postDelayed(pendingVerify, VERIFY_DELAY_S * 1000L);
     }
 
     private void publishSnapshot() {

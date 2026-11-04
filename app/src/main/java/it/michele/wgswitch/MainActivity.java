@@ -163,6 +163,24 @@ public class MainActivity extends Activity {
         chips.addView(tunnelChip);
         cur.addView(chips);
         cur.addView(ui.toggle("Automazione attiva", !prefs.paused(), new CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(CompoundButton b, boolean on) { prefs.setPaused(!on); }}));
+        List<String> missing = Health.permissionProblems(this);
+        if (!missing.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (String m : missing) sb.append(sb.length() == 0 ? "" : "\n").append("• ").append(m);
+            cur.addView(ui.callout("Mancano permessi o impostazioni", sb.toString()));
+        }
+        cur.addView(ui.label("Cosa vede l'app adesso"));
+        List<String> ssids = SwitchService.currentSsids;
+        List<String> bts = SwitchService.currentBt;
+        if (!SwitchService.running) {
+            cur.addView(ui.hint("Servizio fermo: nessun rilevamento."));
+        } else {
+            cur.addView(ui.body("WiFi: " + (!ssids.isEmpty() ? join(ssids)
+                    : SwitchService.ssidUnreadable ? "connesso, nome non leggibile" : "nessuna rete")));
+            cur.addView(ui.body("Bluetooth: " + (bts.isEmpty() ? "nessun dispositivo" : join(bts))));
+            cur.addView(ui.body("Android Auto: " + (SwitchService.currentCar ? "attivo" : "non attivo")));
+            cur.addView(ui.body("VPN: " + (Health.vpnActive(this) ? "accesa" : "spenta")));
+        }
         if (!Health.problems(this).isEmpty()) {
             cur.addView(ui.callout("Il sistema può fermare WG Switch dopo qualche giorno",
                     "Sistema le voci segnate con la X in \"Batteria e sospensione\"."));
@@ -508,6 +526,12 @@ public class MainActivity extends Activity {
         FlowLayout f = ui.flow();
         for (View v : views) f.addView(v);
         cur.addView(f);
+    }
+
+    private static String join(List<String> l) {
+        StringBuilder sb = new StringBuilder();
+        for (String s : l) sb.append(sb.length() == 0 ? "" : ", ").append(s);
+        return sb.toString();
     }
 
     private LinearLayout.LayoutParams weighted() {

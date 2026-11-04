@@ -10,7 +10,13 @@ import android.app.usage.UsageStatsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.location.LocationManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.PowerManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -82,12 +88,49 @@ final class Health {
         return p;
     }
 
+    private static boolean granted(Context c, String perm) {
+        return c.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
+     * Permessi e impostazioni che mancano per controllare il tunnel o capire a cosa è collegato il telefono.
+     * Include i problemi visti sul campo dal servizio (nome WiFi illeggibile, WireGuard che non esegue i comandi).
+     */
+    static List<String> permissionProblems(Context c) {
+        List<String> p = new ArrayList<>();
+        if (!WireGuard.installed(c)) p.add("app WireGuard non installata");
+        else if (!WireGuard.permissionGranted(c)) p.add("permesso \"Controllo di WireGuard\" mancante");
+        if (!granted(c, Manifest.permission.BLUETOOTH_CONNECT)) p.add("permesso Bluetooth mancante: non vede l'autoradio");
+        if (!granted(c, Manifest.permission.ACCESS_FINE_LOCATION)) p.add("permesso Posizione mancante: non legge il nome del WiFi");
+        else if (!granted(c, Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+            p.add("Posizione non su \"Consenti sempre\": in background non legge il nome del WiFi");
+        LocationManager lm = c.getSystemService(LocationManager.class);
+        if (lm != null && !lm.isLocationEnabled()) p.add("geolocalizzazione spenta: non legge il nome del WiFi");
+        if (!granted(c, Manifest.permission.POST_NOTIFICATIONS)) p.add("notifiche non consentite: non può avvisarti");
+        if (SwitchService.ssidUnreadable) p.add("il nome della rete WiFi attuale non è leggibile");
+        if (SwitchService.wireguardNotResponding) p.add("WireGuard non ha eseguito l'ultimo comando");
+        return p;
+    }
+
+    /** true se c'è una VPN attiva visibile all'app (il tunnel di WireGuard). */
+    @SuppressWarnings("deprecation")
+    static boolean vpnActive(Context c) {
+        ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+        if (cm == null) return false;
+        for (Network n : cm.getAllNetworks()) {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return true;
+        }
+        return false;
+    }
+
     /** Riassunto per il registro eventi. */
     static String summary(Context c) {
-        List<String> p = problems(c);
+        List<String> p = permissionProblems(c);
+        p.addAll(problems(c));
         String bucket = "standby " + bucketName(standbyBucket(c));
-        return p.isEmpty() ? "Controllo sospensione: tutto ok (" + bucket + ")"
-                : "ATTENZIONE sospensione: " + join(p) + " (" + bucket + ")";
+        return p.isEmpty() ? "Controllo permessi e sospensione: tutto ok (" + bucket + ")"
+                : "ATTENZIONE: " + join(p) + " (" + bucket + ")";
     }
 
     static String join(List<String> p) {
