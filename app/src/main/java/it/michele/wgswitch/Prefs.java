@@ -22,10 +22,12 @@ final class Prefs {
     static final String KEY_LOG = "log";
     static final String KEY_LAST_CHECK = "last_check";
     static final String KEY_LAST_HEALTH = "last_health";
+    static final String KEY_LAST_EXIT = "last_exit_seen";
 
     /** Chiavi di stato che non cambiano la configurazione: il servizio non deve rivalutare per queste. */
     static boolean isStateKey(String key) {
-        return KEY_STATUS.equals(key) || KEY_LOG.equals(key) || KEY_LAST_CHECK.equals(key) || KEY_LAST_HEALTH.equals(key);
+        return KEY_STATUS.equals(key) || KEY_LOG.equals(key) || KEY_LAST_CHECK.equals(key) || KEY_LAST_HEALTH.equals(key)
+                || KEY_LAST_EXIT.equals(key);
     }
 
     private static final int MAX_LOG_LINES = 100;
@@ -66,6 +68,9 @@ final class Prefs {
 
     String lastHealth() { return sp.getString(KEY_LAST_HEALTH, ""); }
     void setLastHealth(String v) { sp.edit().putString(KEY_LAST_HEALTH, v).apply(); }
+
+    long lastExitSeen() { return sp.getLong(KEY_LAST_EXIT, 0); }
+    void setLastExitSeen(long v) { sp.edit().putLong(KEY_LAST_EXIT, v).apply(); }
 
     String log() { return sp.getString(KEY_LOG, ""); }
 

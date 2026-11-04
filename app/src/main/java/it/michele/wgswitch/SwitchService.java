@@ -115,6 +115,7 @@ public class SwitchService extends Service {
             return;
         }
         running = true;
+        Health.logExitReasons(this, prefs);
         prefs.log("Servizio avviato");
         Watchdog.schedule(this);
         // Stato di sospensione all'avvio: se Samsung limita l'app lo si vede subito nel registro.
@@ -143,6 +144,11 @@ public class SwitchService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent == null) {
+            prefs.log("Servizio riavviato automaticamente dal sistema");
+        } else if (intent.getStringExtra("reason") != null && intent.getAction() == null) {
+            prefs.log("Richiesta di avvio: " + intent.getStringExtra("reason"));
+        }
         if (intent != null && ACTION_TOGGLE_PAUSE.equals(intent.getAction())) {
             prefs.setPaused(!prefs.paused());
         } else if (intent != null && ACTION_REEVALUATE.equals(intent.getAction())) {
@@ -155,7 +161,7 @@ public class SwitchService extends Service {
     @Override
     public void onDestroy() {
         running = false;
-        if (pendingUp != null) handler.removeCallbacks(pendingUp);
+        handler.removeCallbacksAndMessages(null);
         if (wifiCallback != null) cm.unregisterNetworkCallback(wifiCallback);
         if (btReceiver != null) unregisterReceiver(btReceiver);
         if (carReceiver != null) unregisterReceiver(carReceiver);
@@ -247,7 +253,16 @@ public class SwitchService extends Service {
         // Broadcast di sistema: arrivano anche a un receiver non esportato, che le altre app non possono raggiungere.
         registerReceiver(btReceiver, f, Context.RECEIVER_NOT_EXPORTED);
 
-        // Stato iniziale: dispositivi già connessi sui profili audio e chiamate.
+        queryProfiles();
+        // Avviato appena dopo una connessione Bluetooth (es. in auto): i profili audio e Android Auto
+        // possono comparire qualche secondo dopo, quindi si ricontrolla un paio di volte.
+        for (long ms : new long[]{4000, 12000, 25000}) {
+            handler.postDelayed(new Runnable() { @Override public void run() { queryProfiles(); queryCar(); }}, ms);
+        }
+    }
+
+    /** Dispositivi già connessi sui profili audio e chiamate. */
+    private void queryProfiles() {
         BluetoothManager bm = getSystemService(BluetoothManager.class);
         BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
         if (adapter == null) return;
@@ -263,7 +278,7 @@ public class SwitchService extends Service {
                         } catch (SecurityException ignored) {
                         }
                         adapter.closeProfileProxy(p, proxy);
-                        evaluate();
+                        if (running) evaluate();
                     }
 
                     @Override
@@ -321,7 +336,7 @@ public class SwitchService extends Service {
 
     private void postCarState(final boolean connected) {
         handler.post(new Runnable() { @Override public void run() {
-            if (connected != car) {
+            if (running && connected != car) {
                 car = connected;
                 prefs.log(connected ? "Android Auto attivo" : "Android Auto non attivo");
                 evaluate();
