@@ -267,6 +267,7 @@ public class SwitchService extends Service {
                 }
                 BluetoothDevice d = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class);
                 if (d == null) return;
+                if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(intent.getAction()) && !bonded(d)) return;
                 String name = deviceName(d);
                 if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(intent.getAction())) {
                     bt.put(d.getAddress(), name);
@@ -286,8 +287,10 @@ public class SwitchService extends Service {
         f.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
         f.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
         f.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-        // Broadcast di sistema: arrivano anche a un receiver non esportato, che le altre app non possono raggiungere.
-        registerReceiver(btReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+        // Deve essere ESPORTATO: ACL_CONNECTED/DISCONNECTED li invia l'app di sistema Bluetooth (uid bluetooth, non
+        // system), quindi un receiver RECEIVER_NOT_EXPORTED non li riceve mai (regressione della 2.0.0: l'autoradio
+        // non veniva più vista). Per limitare i finti eventi si accettano solo dispositivi associati al telefono.
+        registerReceiver(btReceiver, f, Context.RECEIVER_EXPORTED);
 
         queryProfiles();
         scheduleResync();
@@ -312,6 +315,18 @@ public class SwitchService extends Service {
         queryCar();
         handler.postDelayed(this, PERIODIC_SYNC_MS);
     }};
+
+    /** true se il dispositivo è associato al telefono (gli eventi su dispositivi sconosciuti vengono ignorati). */
+    private boolean bonded(BluetoothDevice d) {
+        BluetoothAdapter a = adapter();
+        try {
+            Set<BluetoothDevice> b = a != null ? a.getBondedDevices() : null;
+            if (b == null) return false;
+            for (BluetoothDevice x : b) if (x.getAddress().equals(d.getAddress())) return true;
+        } catch (SecurityException ignored) {
+        }
+        return false;
+    }
 
     private BluetoothAdapter adapter() {
         BluetoothManager bm = getSystemService(BluetoothManager.class);
@@ -405,9 +420,18 @@ public class SwitchService extends Service {
         }});
     }
 
+    private volatile String carProviderNote;
+
+    /** Provider di Android Auto attendibile: quello di Android Auto o di un'app di sistema. Annota nel registro se manca. */
     private boolean trustedCarProvider() {
         ProviderInfo pi = getPackageManager().resolveContentProvider(CAR_AUTHORITY, 0);
-        return pi != null && ANDROID_AUTO_PACKAGE.equals(pi.packageName);
+        boolean ok = pi != null && (ANDROID_AUTO_PACKAGE.equals(pi.packageName)
+                || (pi.applicationInfo != null && (pi.applicationInfo.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0));
+        String note = pi == null ? "Android Auto: stato di connessione non disponibile (provider non trovato)"
+                : ok ? null : "Android Auto: provider di un'app non attendibile ignorato (" + pi.packageName + ")";
+        if (note != null && !note.equals(carProviderNote)) prefs.log(note);
+        carProviderNote = note;
+        return ok;
     }
 
     // ---- Regole ----
