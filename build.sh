@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 PKG=it.michele.wgswitch
 # Versione MAGGIORE.MINORE.CORREZIONE: nuova funzione = MINORE+1, correzione = CORREZIONE+1,
 # MAGGIORE solo su indicazione di Michele. versionCode derivato: M*10000 + m*100 + c.
-VERSION_NAME=${VERSION_NAME:-2.1.1}
+VERSION_NAME=${VERSION_NAME:-2.3.2}
 IFS=. read -r V_MAJ V_MIN V_FIX <<< "$VERSION_NAME"
 VERSION_CODE=${VERSION_CODE:-$((V_MAJ * 10000 + V_MIN * 100 + ${V_FIX:-0}))}
 SRC=app/src/main

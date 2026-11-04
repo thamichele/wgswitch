@@ -62,6 +62,13 @@ public class SwitchService extends Service {
     static volatile List<String> currentBt = new ArrayList<>();
     static volatile boolean currentCar;
     static volatile boolean running;
+    /** WiFi connesso ma nome non leggibile: di solito manca la posizione (o "Consenti sempre"). */
+    static volatile boolean ssidUnreadable;
+    /** WireGuard non ha acceso/spento la VPN nemmeno dopo un secondo tentativo. */
+    static volatile boolean wireguardNotResponding;
+
+    /** Secondi di attesa prima di verificare che WireGuard abbia eseguito il comando. */
+    private static final int VERIFY_DELAY_S = 10;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Prefs prefs;
@@ -161,6 +168,8 @@ public class SwitchService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        ssidUnreadable = false;
+        wireguardNotResponding = false;
         handler.removeCallbacksAndMessages(null);
         if (wifiCallback != null) cm.unregisterNetworkCallback(wifiCallback);
         if (btReceiver != null) unregisterReceiver(btReceiver);
@@ -182,6 +191,8 @@ public class SwitchService extends Service {
         cm = getSystemService(ConnectivityManager.class);
         NetworkRequest request = new NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                // anche le reti senza internet, come il WiFi del dongle di Android Auto wireless
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build();
         wifiCallback = new ConnectivityManager.NetworkCallback(
                 ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO) {
@@ -194,6 +205,7 @@ public class SwitchService extends Service {
                 if (known && (ssid == null ? old == null : ssid.equals(old))) return;
                 if (ssid != null) prefs.log("WiFi connesso: " + ssid);
                 else prefs.log("WiFi connesso ma SSID non leggibile: controlla posizione e permessi");
+                updateSsidReadable();
                 evaluate();
             }
 
@@ -202,10 +214,23 @@ public class SwitchService extends Service {
                 if (!wifi.containsKey(network)) return;
                 String old = wifi.remove(network);
                 prefs.log("WiFi disconnesso" + (old != null ? ": " + old : ""));
+                updateSsidReadable();
                 evaluate();
             }
         };
         cm.registerNetworkCallback(request, wifiCallback, handler);
+    }
+
+    /** Segnala (registro + notifica) quando il nome del WiFi diventa illeggibile, cioè le reti di eccezione non funzionano. */
+    private void updateSsidReadable() {
+        boolean unreadable = wifi.containsValue(null);
+        if (unreadable == ssidUnreadable) return;
+        ssidUnreadable = unreadable;
+        if (unreadable) {
+            prefs.log("PERMESSI: non riesco a leggere il nome del WiFi, le reti di eccezione non funzionano");
+            Health.alert(this, "Non riesco a leggere il nome della rete WiFi: controlla Posizione \"Consenti sempre\" "
+                    + "e che la geolocalizzazione sia attiva.");
+        }
     }
 
     static String cleanSsid(String s) {
@@ -222,7 +247,18 @@ public class SwitchService extends Service {
             public void onReceive(Context context, Intent intent) {
                 if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(intent.getAction())) {
                     int st = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_ON);
-                    if (st == BluetoothAdapter.STATE_OFF && !bt.isEmpty()) {
+                    if (st == BluetoothAdapter.STATE_ON) {
+                        prefs.log("Bluetooth acceso");
+                        scheduleResync();
+                    } else if (st == BluetoothAdapter.STATE_OFF && !bt.isEmpty()) {
+                        // Samsung a volte annuncia "spento" mentre il Bluetooth resta attivo (es. con Android Auto
+                        // wireless): si svuota l'elenco solo se l'adattatore è davvero spento.
+                        BluetoothAdapter a = adapter();
+                        if (a != null && a.getState() != BluetoothAdapter.STATE_OFF) {
+                            prefs.log("Avviso \"Bluetooth spento\" ignorato: l'adattatore risulta ancora attivo");
+                            scheduleResync();
+                            return;
+                        }
                         bt.clear();
                         prefs.log("Bluetooth spento");
                         evaluate();
@@ -231,6 +267,7 @@ public class SwitchService extends Service {
                 }
                 BluetoothDevice d = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class);
                 if (d == null) return;
+                if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(intent.getAction()) && !bonded(d)) return;
                 String name = deviceName(d);
                 if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(intent.getAction())) {
                     bt.put(d.getAddress(), name);
@@ -250,15 +287,50 @@ public class SwitchService extends Service {
         f.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
         f.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
         f.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-        // Broadcast di sistema: arrivano anche a un receiver non esportato, che le altre app non possono raggiungere.
-        registerReceiver(btReceiver, f, Context.RECEIVER_NOT_EXPORTED);
+        // Deve essere ESPORTATO: ACL_CONNECTED/DISCONNECTED li invia l'app di sistema Bluetooth (uid bluetooth, non
+        // system), quindi un receiver RECEIVER_NOT_EXPORTED non li riceve mai (regressione della 2.0.0: l'autoradio
+        // non veniva più vista). Per limitare i finti eventi si accettano solo dispositivi associati al telefono.
+        registerReceiver(btReceiver, f, Context.RECEIVER_EXPORTED);
 
         queryProfiles();
-        // Avviato appena dopo una connessione Bluetooth (es. in auto): i profili audio e Android Auto
-        // possono comparire qualche secondo dopo, quindi si ricontrolla un paio di volte.
+        scheduleResync();
+        handler.postDelayed(periodicSync, PERIODIC_SYNC_MS);
+    }
+
+    /** Ricontrolla profili Bluetooth e Android Auto qualche secondo dopo un cambiamento (o all'avvio). */
+    private void scheduleResync() {
         for (long ms : new long[]{4000, 12000, 25000}) {
             handler.postDelayed(new Runnable() { @Override public void run() { queryProfiles(); queryCar(); }}, ms);
         }
+    }
+
+    /**
+     * Rete di sicurezza: non ci si affida solo agli eventi (su Samsung a volte mancano), ogni 30 s si rilegge
+     * quali dispositivi sono connessi e se Android Auto è attivo.
+     */
+    private static final long PERIODIC_SYNC_MS = 30000;
+    private final Runnable periodicSync = new Runnable() { @Override public void run() {
+        if (!running) return;
+        queryProfiles();
+        queryCar();
+        handler.postDelayed(this, PERIODIC_SYNC_MS);
+    }};
+
+    /** true se il dispositivo è associato al telefono (gli eventi su dispositivi sconosciuti vengono ignorati). */
+    private boolean bonded(BluetoothDevice d) {
+        BluetoothAdapter a = adapter();
+        try {
+            Set<BluetoothDevice> b = a != null ? a.getBondedDevices() : null;
+            if (b == null) return false;
+            for (BluetoothDevice x : b) if (x.getAddress().equals(d.getAddress())) return true;
+        } catch (SecurityException ignored) {
+        }
+        return false;
+    }
+
+    private BluetoothAdapter adapter() {
+        BluetoothManager bm = getSystemService(BluetoothManager.class);
+        return bm != null ? bm.getAdapter() : null;
     }
 
     /** Dispositivi già connessi sui profili audio e chiamate. */
@@ -273,7 +345,11 @@ public class SwitchService extends Service {
                     public void onServiceConnected(int p, BluetoothProfile proxy) {
                         try {
                             for (BluetoothDevice d : proxy.getConnectedDevices()) {
-                                bt.put(d.getAddress(), deviceName(d));
+                                if (!bt.containsKey(d.getAddress())) {
+                                    String name = deviceName(d);
+                                    bt.put(d.getAddress(), name);
+                                    prefs.log("Bluetooth già connesso: " + name);
+                                }
                             }
                         } catch (SecurityException ignored) {
                         }
@@ -344,9 +420,18 @@ public class SwitchService extends Service {
         }});
     }
 
+    private volatile String carProviderNote;
+
+    /** Provider di Android Auto attendibile: quello di Android Auto o di un'app di sistema. Annota nel registro se manca. */
     private boolean trustedCarProvider() {
         ProviderInfo pi = getPackageManager().resolveContentProvider(CAR_AUTHORITY, 0);
-        return pi != null && ANDROID_AUTO_PACKAGE.equals(pi.packageName);
+        boolean ok = pi != null && (ANDROID_AUTO_PACKAGE.equals(pi.packageName)
+                || (pi.applicationInfo != null && (pi.applicationInfo.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0));
+        String note = pi == null ? "Android Auto: stato di connessione non disponibile (provider non trovato)"
+                : ok ? null : "Android Auto: provider di un'app non attendibile ignorato (" + pi.packageName + ")";
+        if (note != null && !note.equals(carProviderNote)) prefs.log(note);
+        carProviderNote = note;
+        return ok;
     }
 
     // ---- Regole ----
@@ -408,10 +493,16 @@ public class SwitchService extends Service {
         }
     }
 
+    private Runnable pendingVerify;
+
     private void send(boolean up, String why) {
         if (lastSent != null && lastSent == up) return;
         if (!WireGuard.permissionGranted(this)) {
-            if (!permissionWarned) prefs.log("Manca il permesso per controllare WireGuard");
+            if (!permissionWarned) {
+                prefs.log("PERMESSI: manca il permesso per controllare WireGuard, il tunnel non viene " + (up ? "acceso" : "spento"));
+                Health.alert(this, "Manca il permesso \"Controllo di WireGuard\": il tunnel non viene "
+                        + (up ? "acceso" : "spento") + ". Apri l'app e concedilo.");
+            }
             permissionWarned = true;
             return;
         }
@@ -419,6 +510,38 @@ public class SwitchService extends Service {
         WireGuard.setTunnel(this, prefs.tunnel(), up);
         lastSent = up;
         prefs.log((up ? "Tunnel ACCESO" : "Tunnel SPENTO") + " (" + why + ")");
+        scheduleVerify(up, false);
+    }
+
+    /** Dopo qualche secondo controlla che la VPN sia davvero accesa/spenta; altrimenti riprova una volta e avvisa. */
+    private void scheduleVerify(final boolean up, final boolean retried) {
+        if (pendingVerify != null) handler.removeCallbacks(pendingVerify);
+        pendingVerify = new Runnable() { @Override public void run() {
+            pendingVerify = null;
+            if (!running || lastSent == null || lastSent != up) return;
+            boolean vpn = Health.vpnActive(SwitchService.this);
+            if (vpn == up) {
+                if (retried) prefs.log("Verifica: al secondo tentativo WireGuard ha eseguito il comando");
+                if (wireguardNotResponding) {
+                    wireguardNotResponding = false;
+                    Health.clearAlert(SwitchService.this);
+                }
+                return;
+            }
+            String state = vpn ? "ancora accesa" : "ancora spenta";
+            if (!retried) {
+                prefs.log("Verifica: la VPN risulta " + state + ", invio di nuovo il comando a WireGuard");
+                WireGuard.setTunnel(SwitchService.this, prefs.tunnel(), up);
+                scheduleVerify(up, true);
+            } else {
+                wireguardNotResponding = true;
+                prefs.log("ATTENZIONE: WireGuard non esegue i comandi (VPN " + state + "). Controlla il nome del tunnel, "
+                        + "\"Consenti app di controllo remoto\" e che WireGuard non sia in sospensione");
+                Health.alert(SwitchService.this, "WireGuard non ha " + (up ? "acceso" : "spento") + " il tunnel. "
+                        + "Controlla il nome del tunnel e che l'app WireGuard non sia in sospensione (Batteria: Senza restrizioni).");
+            }
+        }};
+        handler.postDelayed(pendingVerify, VERIFY_DELAY_S * 1000L);
     }
 
     private void publishSnapshot() {
@@ -460,6 +583,7 @@ public class SwitchService extends Service {
         boolean minimized = prefs != null && prefs.minimizedNotification();
         return new Notification.Builder(this, minimized ? CHANNEL_MIN : CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat)
+                .setColor(Ui.notificationColor(this))
                 .setContentTitle("WG Switch")
                 .setContentText(text)
                 .setContentIntent(open)

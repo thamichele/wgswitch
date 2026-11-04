@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Arancio UI, tema chiaro: i colori del codice sono in Ui.java -->
+    <color name="bg">#F6F4EF</color>
+    <color name="accent">#A85400</color>
+    <bool name="light_bars">true</bool>
+</resources>

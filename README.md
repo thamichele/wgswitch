@@ -33,6 +33,12 @@ pubblicare gli aggiornamenti, che Android accetta solo se firmati con la stessa 
 3. `FDROID_KEYSTORE=... FDROID_PASS=... ./fdroid.sh build/wgswitch-X.Y.Z.apk`, poi il push del ramo `fdroid`
    indicato dallo script, e una release `vX.Y.Z` con l'APK allegato.
 
+## Design
+L'interfaccia segue il kit "Arancio UI" (artifact "UI per le mie app": https://claude.ai/artifact/Pqg5G8jAoK6BCu9pQUUJmi):
+grigi caldi, tema chiaro e scuro secondo il telefono, colore principale a scelta tra i sei della sezione
+"Modalità colori" (Aspetto e notifiche), font JetBrains Mono (licenza SIL OFL 1.1, vedi `LICENSES/`).
+Token e componenti sono in `Ui.java`: quando l'artifact cambia, aggiorna prima lì.
+
 ## Verifica integrità
 Impronta SHA-256 del certificato di firma (uguale per tutte le versioni):
 `23:23:47:67:be:c7:03:55:0d:70:5d:3c:d8:19:d5:78:83:2a:2a:1c:7f:9c:eb:ef:15:78:41:25:da:c5:ca:a0`

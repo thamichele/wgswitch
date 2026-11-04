@@ -60,8 +60,11 @@ public class Watchdog extends JobService {
             prefs.log(summary);
         }
         List<String> problems = Health.problems(c);
+        List<String> missing = Health.permissionProblems(c);
         if (restartFailed) {
             Health.alert(c, "Il servizio è stato chiuso dal sistema e non è ripartito. Apri l'app.");
+        } else if (!missing.isEmpty()) {
+            Health.alert(c, "Mancano permessi o impostazioni: " + Health.join(missing) + ".");
         } else if (!problems.isEmpty()) {
             Health.alert(c, "Il sistema sta limitando l'app: " + Health.join(problems) + ".");
         } else {

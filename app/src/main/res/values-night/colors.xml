@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Arancio UI, tema scuro -->
+    <color name="bg">#1C1B1A</color>
+    <color name="accent">#D96D00</color>
+    <bool name="light_bars">false</bool>
+</resources>
