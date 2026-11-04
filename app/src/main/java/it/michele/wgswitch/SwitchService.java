@@ -191,6 +191,8 @@ public class SwitchService extends Service {
         cm = getSystemService(ConnectivityManager.class);
         NetworkRequest request = new NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                // anche le reti senza internet, come il WiFi del dongle di Android Auto wireless
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build();
         wifiCallback = new ConnectivityManager.NetworkCallback(
                 ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO) {
@@ -245,7 +247,18 @@ public class SwitchService extends Service {
             public void onReceive(Context context, Intent intent) {
                 if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(intent.getAction())) {
                     int st = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.STATE_ON);
-                    if (st == BluetoothAdapter.STATE_OFF && !bt.isEmpty()) {
+                    if (st == BluetoothAdapter.STATE_ON) {
+                        prefs.log("Bluetooth acceso");
+                        scheduleResync();
+                    } else if (st == BluetoothAdapter.STATE_OFF && !bt.isEmpty()) {
+                        // Samsung a volte annuncia "spento" mentre il Bluetooth resta attivo (es. con Android Auto
+                        // wireless): si svuota l'elenco solo se l'adattatore è davvero spento.
+                        BluetoothAdapter a = adapter();
+                        if (a != null && a.getState() != BluetoothAdapter.STATE_OFF) {
+                            prefs.log("Avviso \"Bluetooth spento\" ignorato: l'adattatore risulta ancora attivo");
+                            scheduleResync();
+                            return;
+                        }
                         bt.clear();
                         prefs.log("Bluetooth spento");
                         evaluate();
@@ -277,11 +290,32 @@ public class SwitchService extends Service {
         registerReceiver(btReceiver, f, Context.RECEIVER_NOT_EXPORTED);
 
         queryProfiles();
-        // Avviato appena dopo una connessione Bluetooth (es. in auto): i profili audio e Android Auto
-        // possono comparire qualche secondo dopo, quindi si ricontrolla un paio di volte.
+        scheduleResync();
+        handler.postDelayed(periodicSync, PERIODIC_SYNC_MS);
+    }
+
+    /** Ricontrolla profili Bluetooth e Android Auto qualche secondo dopo un cambiamento (o all'avvio). */
+    private void scheduleResync() {
         for (long ms : new long[]{4000, 12000, 25000}) {
             handler.postDelayed(new Runnable() { @Override public void run() { queryProfiles(); queryCar(); }}, ms);
         }
+    }
+
+    /**
+     * Rete di sicurezza: non ci si affida solo agli eventi (su Samsung a volte mancano), ogni 30 s si rilegge
+     * quali dispositivi sono connessi e se Android Auto è attivo.
+     */
+    private static final long PERIODIC_SYNC_MS = 30000;
+    private final Runnable periodicSync = new Runnable() { @Override public void run() {
+        if (!running) return;
+        queryProfiles();
+        queryCar();
+        handler.postDelayed(this, PERIODIC_SYNC_MS);
+    }};
+
+    private BluetoothAdapter adapter() {
+        BluetoothManager bm = getSystemService(BluetoothManager.class);
+        return bm != null ? bm.getAdapter() : null;
     }
 
     /** Dispositivi già connessi sui profili audio e chiamate. */
@@ -296,7 +330,11 @@ public class SwitchService extends Service {
                     public void onServiceConnected(int p, BluetoothProfile proxy) {
                         try {
                             for (BluetoothDevice d : proxy.getConnectedDevices()) {
-                                bt.put(d.getAddress(), deviceName(d));
+                                if (!bt.containsKey(d.getAddress())) {
+                                    String name = deviceName(d);
+                                    bt.put(d.getAddress(), name);
+                                    prefs.log("Bluetooth già connesso: " + name);
+                                }
                             }
                         } catch (SecurityException ignored) {
                         }
