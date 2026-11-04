@@ -14,7 +14,112 @@
       }
     },
     "address": "https://raw.githubusercontent.com/thamichele/wgswitch/fdroid/archive",
-    "timestamp": 1793792518000
+    "timestamp": 1793811216000,
+    "categories": {
+      "Connectivity": {
+        "name": {
+          "en-US": "Connectivity"
+        }
+      },
+      "System": {
+        "name": {
+          "en-US": "System"
+        }
+      }
+    }
   },
-  "packages": {}
+  "packages": {
+    "it.michele.wgswitch": {
+      "metadata": {
+        "added": 1793417393000,
+        "categories": [
+          "Connectivity",
+          "System"
+        ],
+        "issueTracker": "https://github.com/thamichele/wgswitch/issues",
+        "lastUpdated": 1793811216000,
+        "license": "Proprietary",
+        "sourceCode": "https://github.com/thamichele/wgswitch",
+        "authorName": "Michele",
+        "name": {
+          "en-US": "WG Switch"
+        },
+        "summary": {
+          "en-US": "Spegne e riaccende il tunnel WireGuard in base a WiFi, Bluetooth e Android Auto"
+        },
+        "description": {
+          "en-US": "Controlla un tunnel dell'app WireGuard ufficiale: lo spegne quando sei collegato a una delle reti WiFi\no dei dispositivi Bluetooth scelti, oppure ad Android Auto, e lo riaccende negli altri casi.\n\nRichiede l'app WireGuard con l'opzione \"Consenti app di controllo remoto\" attiva."
+        },
+        "icon": {
+          "en-US": {
+            "name": "/icons/it.michele.wgswitch.20000.png",
+            "sha256": "2db6171793246ffc4cde14aafcfa0e02277f46922894d7bbc9b623a018f45bd4",
+            "size": 1542
+          }
+        },
+        "preferredSigner": "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0"
+      },
+      "versions": {
+        "94facc9dd702485b80a579832d38dd4e9291057b774833b4181df60aa6147d38": {
+          "added": 1793417393000,
+          "file": {
+            "name": "/wgswitch-2.0.0.apk",
+            "sha256": "94facc9dd702485b80a579832d38dd4e9291057b774833b4181df60aa6147d38",
+            "size": 54230
+          },
+          "manifest": {
+            "versionName": "2.0.0",
+            "versionCode": 20000,
+            "usesSdk": {
+              "minSdkVersion": 33,
+              "targetSdkVersion": 34
+            },
+            "signer": {
+              "sha256": [
+                "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0"
+              ]
+            },
+            "usesPermission": [
+              {
+                "name": "android.permission.ACCESS_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.ACCESS_WIFI_STATE"
+              },
+              {
+                "name": "android.permission.ACCESS_COARSE_LOCATION"
+              },
+              {
+                "name": "android.permission.ACCESS_FINE_LOCATION"
+              },
+              {
+                "name": "android.permission.ACCESS_BACKGROUND_LOCATION"
+              },
+              {
+                "name": "android.permission.BLUETOOTH_CONNECT"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+              },
+              {
+                "name": "android.permission.POST_NOTIFICATIONS"
+              },
+              {
+                "name": "android.permission.RECEIVE_BOOT_COMPLETED"
+              },
+              {
+                "name": "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+              },
+              {
+                "name": "com.wireguard.android.permission.CONTROL_TUNNELS"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
 }

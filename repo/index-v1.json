@@ -1,6 +1,6 @@
 {
   "repo": {
-    "timestamp": 1793792521000,
+    "timestamp": 1793811220000,
     "version": 20002,
     "name": "WG Switch",
     "icon": "icon.png",
@@ -18,7 +18,7 @@
         "Connectivity",
         "System"
       ],
-      "suggestedVersionCode": "20101",
+      "suggestedVersionCode": "20302",
       "description": "Controlla un tunnel dell'app WireGuard ufficiale: lo spegne quando sei collegato a una delle reti WiFi\no dei dispositivi Bluetooth scelti, oppure ad Android Auto, e lo riaccende negli altri casi.\n\nRichiede l'app WireGuard con l'opzione \"Consenti app di controllo remoto\" attiva.",
       "issueTracker": "https://github.com/thamichele/wgswitch/issues",
       "license": "Proprietary",
@@ -26,13 +26,77 @@
       "sourceCode": "https://github.com/thamichele/wgswitch",
       "summary": "Spegne e riaccende il tunnel WireGuard in base a WiFi, Bluetooth e Android Auto",
       "added": 1793417393000,
-      "icon": "it.michele.wgswitch.20101.png",
+      "icon": "it.michele.wgswitch.20302.png",
       "packageName": "it.michele.wgswitch",
-      "lastUpdated": 1793792518000
+      "lastUpdated": 1793811216000
     }
   ],
   "packages": {
     "it.michele.wgswitch": [
+      {
+        "added": 1793811216000,
+        "apkName": "wgswitch-2.3.2.apk",
+        "hash": "98d826a0a434e9f35325a3ec0d9f547f1ab6d6a9bebf7804fdefaec4c4e2a882",
+        "hashType": "sha256",
+        "minSdkVersion": 33,
+        "packageName": "it.michele.wgswitch",
+        "sig": "5b915cafe721845fa834569b132dbc07",
+        "signer": "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0",
+        "size": 464854,
+        "targetSdkVersion": 34,
+        "uses-permission": [
+          [
+            "android.permission.ACCESS_NETWORK_STATE",
+            null
+          ],
+          [
+            "android.permission.ACCESS_WIFI_STATE",
+            null
+          ],
+          [
+            "android.permission.ACCESS_COARSE_LOCATION",
+            null
+          ],
+          [
+            "android.permission.ACCESS_FINE_LOCATION",
+            null
+          ],
+          [
+            "android.permission.ACCESS_BACKGROUND_LOCATION",
+            null
+          ],
+          [
+            "android.permission.BLUETOOTH_CONNECT",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE",
+            null
+          ],
+          [
+            "android.permission.POST_NOTIFICATIONS",
+            null
+          ],
+          [
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            null
+          ],
+          [
+            "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+            null
+          ],
+          [
+            "com.wireguard.android.permission.CONTROL_TUNNELS",
+            null
+          ]
+        ],
+        "versionCode": 20302,
+        "versionName": "2.3.2"
+      },
       {
         "added": 1793792518000,
         "apkName": "wgswitch-2.1.1.apk",
@@ -160,70 +224,6 @@
         ],
         "versionCode": 20100,
         "versionName": "2.1.0"
-      },
-      {
-        "added": 1793417393000,
-        "apkName": "wgswitch-2.0.0.apk",
-        "hash": "94facc9dd702485b80a579832d38dd4e9291057b774833b4181df60aa6147d38",
-        "hashType": "sha256",
-        "minSdkVersion": 33,
-        "packageName": "it.michele.wgswitch",
-        "sig": "5b915cafe721845fa834569b132dbc07",
-        "signer": "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0",
-        "size": 54230,
-        "targetSdkVersion": 34,
-        "uses-permission": [
-          [
-            "android.permission.ACCESS_NETWORK_STATE",
-            null
-          ],
-          [
-            "android.permission.ACCESS_WIFI_STATE",
-            null
-          ],
-          [
-            "android.permission.ACCESS_COARSE_LOCATION",
-            null
-          ],
-          [
-            "android.permission.ACCESS_FINE_LOCATION",
-            null
-          ],
-          [
-            "android.permission.ACCESS_BACKGROUND_LOCATION",
-            null
-          ],
-          [
-            "android.permission.BLUETOOTH_CONNECT",
-            null
-          ],
-          [
-            "android.permission.FOREGROUND_SERVICE",
-            null
-          ],
-          [
-            "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE",
-            null
-          ],
-          [
-            "android.permission.POST_NOTIFICATIONS",
-            null
-          ],
-          [
-            "android.permission.RECEIVE_BOOT_COMPLETED",
-            null
-          ],
-          [
-            "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-            null
-          ],
-          [
-            "com.wireguard.android.permission.CONTROL_TUNNELS",
-            null
-          ]
-        ],
-        "versionCode": 20000,
-        "versionName": "2.0.0"
       }
     ]
   }
