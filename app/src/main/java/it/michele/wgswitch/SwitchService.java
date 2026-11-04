@@ -460,6 +460,7 @@ public class SwitchService extends Service {
         boolean minimized = prefs != null && prefs.minimizedNotification();
         return new Notification.Builder(this, minimized ? CHANNEL_MIN : CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat)
+                .setColor(Ui.notificationColor(this))
                 .setContentTitle("WG Switch")
                 .setContentText(text)
                 .setContentIntent(open)

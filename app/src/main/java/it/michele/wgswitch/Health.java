@@ -161,6 +161,7 @@ final class Health {
                 new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         Notification n = new Notification.Builder(c, CHANNEL_ALERT)
                 .setSmallIcon(R.drawable.ic_stat)
+                .setColor(Ui.notificationColor(c))
                 .setContentTitle("WG Switch potrebbe smettere di funzionare")
                 .setContentText(text)
                 .setStyle(new Notification.BigTextStyle().bigText(text + "\nTocca per aprire l'app e sistemare."))

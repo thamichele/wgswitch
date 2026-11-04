@@ -18,6 +18,7 @@ final class Prefs {
     static final String KEY_DELAY = "reenable_delay";
     static final String KEY_PAUSED = "paused";
     static final String KEY_MIN_NOTIF = "min_notification";
+    static final String KEY_ACCENT = "accent";
     static final String KEY_STATUS = "status";
     static final String KEY_LOG = "log";
     static final String KEY_LAST_CHECK = "last_check";
@@ -27,7 +28,7 @@ final class Prefs {
     /** Chiavi di stato che non cambiano la configurazione: il servizio non deve rivalutare per queste. */
     static boolean isStateKey(String key) {
         return KEY_STATUS.equals(key) || KEY_LOG.equals(key) || KEY_LAST_CHECK.equals(key) || KEY_LAST_HEALTH.equals(key)
-                || KEY_LAST_EXIT.equals(key);
+                || KEY_LAST_EXIT.equals(key) || KEY_ACCENT.equals(key);
     }
 
     private static final int MAX_LOG_LINES = 100;
@@ -59,6 +60,10 @@ final class Prefs {
 
     boolean minimizedNotification() { return sp.getBoolean(KEY_MIN_NOTIF, false); }
     void setMinimizedNotification(boolean v) { sp.edit().putBoolean(KEY_MIN_NOTIF, v).apply(); }
+
+    /** Colore principale dell'interfaccia (id di Ui.ACCENTS). */
+    String accent() { return sp.getString(KEY_ACCENT, Ui.DEFAULT_ACCENT); }
+    void setAccent(String v) { sp.edit().putString(KEY_ACCENT, v).apply(); }
 
     String status() { return sp.getString(KEY_STATUS, "Servizio non avviato"); }
     void setStatus(String v) { sp.edit().putString(KEY_STATUS, v).apply(); }

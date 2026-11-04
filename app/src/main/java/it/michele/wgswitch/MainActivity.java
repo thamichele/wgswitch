@@ -9,7 +9,6 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
@@ -19,12 +18,13 @@ import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
-import android.widget.CheckBox;
+import android.view.ViewGroup;
+import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -33,13 +33,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-/** Schermata unica: stato, permessi e configurazione. Interfaccia costruita da codice. */
+/** Schermata unica: stato, permessi e configurazione. Interfaccia costruita da codice con i componenti di Ui. */
 public class MainActivity extends Activity {
     private static final int REQ_PERMS = 1;
 
     private Prefs prefs;
+    private Ui ui;
+    private ScrollView scroll;
     private LinearLayout root;
+    /** Card in costruzione: le sezioni aggiungono qui i loro elementi. */
+    private LinearLayout cur;
     private TextView statusView;
+    private TextView serviceChip;
+    private TextView tunnelChip;
     private TextView logView;
     private final SharedPreferences.OnSharedPreferenceChangeListener listener = new SharedPreferences.OnSharedPreferenceChangeListener() { @Override public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
         if (Prefs.KEY_STATUS.equals(key) || Prefs.KEY_LOG.equals(key)) runOnUiThread(new Runnable() { @Override public void run() { refreshLive(); }});
@@ -49,12 +55,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = new Prefs(this);
-        ScrollView scroll = new ScrollView(this);
+        scroll = new ScrollView(this);
         scroll.setFitsSystemWindows(true);
+        scroll.setClipToPadding(false);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(16);
-        root.setPadding(pad, pad, pad, pad * 2);
         scroll.addView(root);
         setContentView(scroll);
     }
@@ -85,51 +90,87 @@ public class MainActivity extends Activity {
     }
 
     private void build() {
+        int y = scroll.getScrollY();
+        ui = new Ui(this, prefs.accent());
+        scroll.setBackgroundColor(ui.bg);
         root.removeAllViews();
+        // spaziatura del kit: 16 ai lati, 12 tra le card
+        root.setPadding(ui.dp(16), ui.dp(20), ui.dp(16), ui.dp(32));
+        root.setDividerDrawable(spacer(12));
+        root.setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE);
 
-        statusView = text("", 20, true);
-        root.addView(statusView);
-
-        Switch auto = new Switch(this);
-        auto.setText("Automazione attiva");
-        auto.setChecked(!prefs.paused());
-        auto.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) { prefs.setPaused(!on); }});
-        root.addView(auto, matchWrap(dp(8)));
-
-        Switch minNotif = new Switch(this);
-        minNotif.setText("Notifica minimizzata (niente icona in barra)");
-        minNotif.setChecked(prefs.minimizedNotification());
-        minNotif.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) { prefs.setMinimizedNotification(on); }});
-        root.addView(minNotif, matchWrap(dp(4)));
-
+        buildHeader();
+        buildStatus();
         buildPermissions();
+        buildStandby();
         buildTunnel();
         buildWifi();
         buildBluetooth();
         buildCar();
         buildService();
-
-        header("Registro eventi");
-        logView = text("", 12, false);
-        logView.setTypeface(Typeface.MONOSPACE);
-        logView.setTextIsSelectable(true);
-        root.addView(logView);
-        root.addView(button("Svuota registro", new View.OnClickListener() { @Override public void onClick(View v) { prefs.clearLog(); }}));
+        buildAppearance();
+        buildLog();
 
         refreshLive();
+        scroll.post(new Runnable() { @Override public void run() { scroll.scrollTo(0, y); }});
     }
 
     private void refreshLive() {
         if (statusView == null) return;
         String status = SwitchService.running ? prefs.status() : "Servizio fermo";
         statusView.setText(status);
+        if (SwitchService.running) ui.styleChip(serviceChip, "Servizio attivo", ui.okFg, ui.okBg);
+        else ui.styleChip(serviceChip, "Servizio fermo", ui.errFg, ui.errBg);
+        tunnelChip.setVisibility(View.VISIBLE);
+        if (!SwitchService.running) {
+            tunnelChip.setVisibility(View.GONE);
+        } else if (status.startsWith("Tunnel ON")) {
+            ui.styleChip(tunnelChip, "Tunnel acceso", ui.okFg, ui.okBg);
+        } else if (status.startsWith("Tunnel OFF")) {
+            ui.styleChip(tunnelChip, "Eccezione attiva", ui.soft, Ui.alpha(ui.fill, 0.16f));
+        } else if (status.startsWith("Riaccensione") || status.startsWith("Automazione in pausa")) {
+            ui.styleChip(tunnelChip, status.startsWith("Riaccensione") ? "In attesa" : "In pausa", ui.warnFg, ui.warnBg);
+        } else {
+            tunnelChip.setVisibility(View.GONE);
+        }
         logView.setText(prefs.log().isEmpty() ? "Nessun evento" : prefs.log());
     }
 
     // ---- Sezioni ----
 
+    private void buildHeader() {
+        LinearLayout row = ui.row(12);
+        FrameLayout tile = new FrameLayout(this);
+        tile.setBackground(ui.rect(ui.fill, 0, 8));
+        ImageView ic = ui.image(R.drawable.ic_shield, ui.onFill, 22);
+        tile.addView(ic, new FrameLayout.LayoutParams(ui.dp(22), ui.dp(22), Gravity.CENTER));
+        row.addView(tile, new LinearLayout.LayoutParams(ui.dp(40), ui.dp(40)));
+        LinearLayout titles = ui.column(2);
+        titles.addView(ui.text("Tunnel WireGuard automatico", 13, ui.text2, ui.regular));
+        titles.addView(ui.title("WG Switch"));
+        row.addView(titles, weighted());
+        root.addView(row);
+    }
+
+    private void buildStatus() {
+        section("Stato");
+        statusView = ui.text("", 20, ui.text, ui.semibold);
+        cur.addView(statusView);
+        FlowLayout chips = ui.flow();
+        serviceChip = ui.chip("", ui.okFg, ui.okBg);
+        tunnelChip = ui.chip("", ui.okFg, ui.okBg);
+        chips.addView(serviceChip);
+        chips.addView(tunnelChip);
+        cur.addView(chips);
+        cur.addView(ui.toggle("Automazione attiva", !prefs.paused(), new CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(CompoundButton b, boolean on) { prefs.setPaused(!on); }}));
+        if (!Health.problems(this).isEmpty()) {
+            cur.addView(ui.callout("Il sistema può fermare WG Switch dopo qualche giorno",
+                    "Sistema le voci segnate con la X in \"Batteria e sospensione\"."));
+        }
+    }
+
     private void buildPermissions() {
-        header("Permessi");
+        section("Permessi");
         boolean wgInstalled = WireGuard.installed(this);
         permRow("App WireGuard installata", wgInstalled, null, null);
         permRow("Controllo di WireGuard", WireGuard.permissionGranted(this), "Concedi",
@@ -149,20 +190,14 @@ public class MainActivity extends Activity {
                 new View.OnClickListener() { @Override public void onClick(View v) { startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); }});
         permRow("Notifiche", granted(Manifest.permission.POST_NOTIFICATIONS), "Concedi",
                 new View.OnClickListener() { @Override public void onClick(View v) { request(Manifest.permission.POST_NOTIFICATIONS); }});
-        buildStandby();
-        root.addView(button("Apri impostazioni dell'app", new View.OnClickListener() { @Override public void onClick(View v) { startActivity(
+        buttons(ui.button(Ui.SECONDARY, "Apri impostazioni dell'app", R.drawable.ic_open, new View.OnClickListener() { @Override public void onClick(View v) { startActivity(
                 new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))); }}));
     }
 
     // ---- Sospensione / batteria ----
 
     private void buildStandby() {
-        header("Batteria e sospensione");
-        List<String> problems = Health.problems(this);
-        if (!problems.isEmpty()) {
-            TextView warn = text("⚠  Il sistema può fermare WG Switch dopo qualche giorno: sistema le voci con ✗.", 15, true);
-            root.addView(warn, matchWrap(dp(4)));
-        }
+        section("Batteria e sospensione");
         permRow("Batteria: esclusa dall'ottimizzazione", Health.ignoringBatteryOptimizations(this), "Escludi",
                 new View.OnClickListener() { @Override public void onClick(View v) { startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                         Uri.parse("package:" + getPackageName()))); }});
@@ -187,18 +222,18 @@ public class MainActivity extends Activity {
     private void buildSamsung() {
         hint("Samsung mette \"in sospensione\" le app che non apri per qualche giorno, anche se lavorano in background. "
                 + "Per evitarlo:");
-        hint("1. Batteria dell'app: scegli \"Senza restrizioni\".");
-        root.addView(button("Apri batteria dell'app", new View.OnClickListener() { @Override public void onClick(View v) { openAppBattery(); }}));
-        hint("2. Impostazioni > Assistenza dispositivo > Batteria > Limiti utilizzo in background: "
+        step("1. Batteria dell'app: scegli \"Senza restrizioni\".");
+        buttons(ui.button(Ui.SECONDARY, "Apri batteria dell'app", R.drawable.ic_open, new View.OnClickListener() { @Override public void onClick(View v) { openAppBattery(); }}));
+        step("2. Impostazioni > Assistenza dispositivo > Batteria > Limiti utilizzo in background: "
                 + "aggiungi WG Switch ad \"App mai in sospensione\" e controlla che non sia tra le app in sospensione "
                 + "o in sospensione profonda. Se vuoi, disattiva \"Metti in sospensione le app non utilizzate\".");
-        root.addView(button("Apri Limiti utilizzo in background", new View.OnClickListener() { @Override public void onClick(View v) {
+        buttons(ui.button(Ui.SECONDARY, "Apri Limiti utilizzo in background", R.drawable.ic_open, new View.OnClickListener() { @Override public void onClick(View v) {
             openFirst(new Intent().setComponent(new ComponentName("com.samsung.android.lool",
                             "com.samsung.android.sm.battery.ui.BatteryActivity")),
                     new Intent("com.samsung.android.sm.ACTION_BATTERY"),
                     new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
         }}));
-        hint("3. Impostazioni dell'app: disattiva \"Sospendi attività app se non utilizzata\".");
+        step("3. Impostazioni dell'app: disattiva \"Sospendi attività app se non utilizzata\".");
     }
 
     /** Pagina batteria dell'app (Senza restrizioni / Ottimizzata / Limitata), oppure le info dell'app. */
@@ -220,30 +255,21 @@ public class MainActivity extends Activity {
     }
 
     private void buildTunnel() {
-        header("Tunnel WireGuard");
-        hint("Il nome esatto del tunnel come appare nell'app WireGuard.");
-        EditText name = new EditText(this);
-        name.setSingleLine();
-        name.setHint("es. casa");
-        name.setText(prefs.tunnel());
-        root.addView(name, matchWrap(0));
-        LinearLayout row = hRow();
-        row.addView(button("Salva", new View.OnClickListener() { @Override public void onClick(View v) {
-            prefs.setTunnel(name.getText().toString());
-            toast("Tunnel salvato");
-        }}));
-        row.addView(button("Test ON", new View.OnClickListener() { @Override public void onClick(View v) { test(name.getText().toString(), true); }}));
-        row.addView(button("Test OFF", new View.OnClickListener() { @Override public void onClick(View v) { test(name.getText().toString(), false); }}));
-        root.addView(row);
+        section("Tunnel WireGuard");
+        final EditText name = ui.field(prefs.tunnel(), "es. casa");
+        cur.addView(ui.labeled("Nome del tunnel", name, "Il nome esatto del tunnel come appare nell'app WireGuard."));
+        buttons(ui.button(Ui.PRIMARY, "Salva", R.drawable.ic_check, new View.OnClickListener() { @Override public void onClick(View v) {
+                    prefs.setTunnel(name.getText().toString());
+                    toast("Tunnel salvato");
+                }}),
+                ui.button(Ui.SECONDARY, "Test ON", R.drawable.ic_power, new View.OnClickListener() { @Override public void onClick(View v) { test(name.getText().toString(), true); }}),
+                ui.button(Ui.SECONDARY, "Test OFF", R.drawable.ic_power_off, new View.OnClickListener() { @Override public void onClick(View v) { test(name.getText().toString(), false); }}));
 
-        hint("Ritardo prima di riaccendere il tunnel (secondi)");
-        LinearLayout delayRow = hRow();
-        EditText delay = new EditText(this);
+        final EditText delay = ui.field(String.valueOf(prefs.reenableDelaySec()), "10");
         delay.setInputType(InputType.TYPE_CLASS_NUMBER);
-        delay.setText(String.valueOf(prefs.reenableDelaySec()));
-        delay.setEms(4);
-        delayRow.addView(delay);
-        delayRow.addView(button("Salva", new View.OnClickListener() { @Override public void onClick(View v) {
+        LinearLayout delayRow = ui.row(8);
+        delayRow.addView(delay, new LinearLayout.LayoutParams(ui.dp(120), ViewGroup.LayoutParams.WRAP_CONTENT));
+        delayRow.addView(ui.button(Ui.SECONDARY, "Salva", 0, new View.OnClickListener() { @Override public void onClick(View v) {
             try {
                 prefs.setReenableDelaySec(Integer.parseInt(delay.getText().toString().trim()));
                 toast("Ritardo salvato");
@@ -251,100 +277,125 @@ public class MainActivity extends Activity {
                 toast("Numero non valido");
             }
         }}));
-        root.addView(delayRow);
+        cur.addView(ui.labeled("Ritardo prima di riaccendere il tunnel (secondi)", delayRow, null));
     }
 
     private void buildWifi() {
-        header("Reti WiFi di eccezione");
+        section("Reti WiFi di eccezione");
         hint("Connesso a queste reti, il tunnel si spegne.");
         Set<String> ssids = prefs.ssids();
         List<String> sorted = new ArrayList<>(ssids);
         Collections.sort(sorted, String.CASE_INSENSITIVE_ORDER);
-        if (sorted.isEmpty()) hint("Nessuna rete.");
-        for (String s : sorted) {
-            LinearLayout row = hRow();
-            TextView t = text(s, 16, false);
-            row.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-            row.addView(button("Rimuovi", new View.OnClickListener() { @Override public void onClick(View v) {
+        if (sorted.isEmpty()) cur.addView(ui.body("Nessuna rete."));
+        for (final String s : sorted) {
+            LinearLayout row = ui.row(12);
+            row.addView(ui.image(R.drawable.ic_wifi, ui.text2, 20));
+            row.addView(ui.body(s), weighted());
+            TextView rm = ui.button(Ui.DANGER, "Rimuovi", R.drawable.ic_trash, new View.OnClickListener() { @Override public void onClick(View v) {
                 Set<String> cur = prefs.ssids();
                 cur.remove(s);
                 prefs.setSsids(cur);
                 build();
-            }}));
-            root.addView(row);
+            }});
+            rm.setContentDescription("Rimuovi " + s);
+            row.addView(rm);
+            cur.addView(row);
         }
-        String current = currentSsid();
+        final String current = currentSsid();
         hint("Rete attuale: " + (current != null ? current : "nessuna o non leggibile"));
         if (current != null && !ssids.contains(current)) {
-            root.addView(button("Aggiungi \"" + current + "\"", new View.OnClickListener() { @Override public void onClick(View v) { addSsid(current); }}));
+            buttons(ui.button(Ui.PRIMARY, "Aggiungi \"" + current + "\"", R.drawable.ic_plus, new View.OnClickListener() { @Override public void onClick(View v) { addSsid(current); }}));
         }
-        LinearLayout row = hRow();
-        EditText manual = new EditText(this);
-        manual.setSingleLine();
-        manual.setHint("SSID manuale");
-        row.addView(manual, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        row.addView(button("Aggiungi", new View.OnClickListener() { @Override public void onClick(View v) {
+        LinearLayout row = ui.row(8);
+        final EditText manual = ui.field("", "Nome della rete");
+        row.addView(manual, weighted());
+        row.addView(ui.button(Ui.SECONDARY, "Aggiungi", R.drawable.ic_plus, new View.OnClickListener() { @Override public void onClick(View v) {
             String s = manual.getText().toString().trim();
             if (!s.isEmpty()) addSsid(s);
         }}));
-        root.addView(row);
+        cur.addView(ui.labeled("SSID manuale", row, null));
     }
 
     private void buildBluetooth() {
-        header("Dispositivi Bluetooth di eccezione");
+        section("Dispositivi Bluetooth di eccezione");
         hint("Connesso a questi dispositivi (es. l'autoradio), il tunnel si spegne.");
         if (!granted(Manifest.permission.BLUETOOTH_CONNECT)) {
-            hint("Concedi il permesso Bluetooth per vedere i dispositivi associati.");
+            cur.addView(ui.body("Concedi il permesso Bluetooth per vedere i dispositivi associati."));
             return;
         }
         BluetoothManager bm = getSystemService(BluetoothManager.class);
         BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
         Set<BluetoothDevice> bonded = adapter != null ? adapter.getBondedDevices() : null;
         if (bonded == null || bonded.isEmpty()) {
-            hint("Nessun dispositivo associato (o Bluetooth spento).");
+            cur.addView(ui.body("Nessun dispositivo associato (o Bluetooth spento)."));
             return;
         }
         List<BluetoothDevice> list = new ArrayList<>(bonded);
         Collections.sort(list, new java.util.Comparator<BluetoothDevice>() { @Override public int compare(BluetoothDevice a, BluetoothDevice b) { return SwitchService.deviceName(a).compareToIgnoreCase(SwitchService.deviceName(b)); }});
         Set<String> selected = prefs.btDevices();
         List<String> connected = SwitchService.currentBt;
-        for (BluetoothDevice d : list) {
+        LinearLayout items = ui.column(0);
+        for (final BluetoothDevice d : list) {
             String name = SwitchService.deviceName(d);
-            CheckBox cb = new CheckBox(this);
-            cb.setText(name + (connected.contains(name) ? "  (connesso)" : ""));
-            cb.setChecked(selected.contains(d.getAddress()));
-            cb.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
+            LinearLayout row = ui.row(8);
+            row.addView(ui.check(name, selected.contains(d.getAddress()), new CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(CompoundButton b, boolean on) {
                 Set<String> cur = prefs.btDevices();
                 if (on) cur.add(d.getAddress()); else cur.remove(d.getAddress());
                 prefs.setBtDevices(cur);
-            }});
-            root.addView(cb);
+            }}), weighted());
+            if (connected.contains(name)) row.addView(ui.chip("connesso", ui.okFg, ui.okBg));
+            items.addView(row);
         }
+        cur.addView(items);
     }
 
     private void buildCar() {
-        header("Android Auto");
-        CheckBox cb = new CheckBox(this);
-        cb.setText("Spegni il tunnel quando Android Auto è attivo");
-        cb.setChecked(prefs.carEnabled());
-        cb.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(android.widget.CompoundButton b, boolean on) { prefs.setCarEnabled(on); }});
-        root.addView(cb);
-        hint("Stato attuale: " + (SwitchService.currentCar ? "attivo" : "non attivo")
-                + ". Con Android Auto wireless conviene selezionare anche l'autoradio tra i dispositivi Bluetooth.");
+        section("Android Auto");
+        cur.addView(ui.toggle("Spegni il tunnel quando Android Auto è attivo", prefs.carEnabled(), new CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(CompoundButton b, boolean on) { prefs.setCarEnabled(on); }}));
+        FlowLayout chips = ui.flow();
+        chips.addView(SwitchService.currentCar ? ui.chip("Android Auto attivo", ui.soft, Ui.alpha(ui.fill, 0.16f))
+                : ui.chip("Android Auto non attivo", ui.text2, ui.raised));
+        cur.addView(chips);
+        hint("Con Android Auto wireless conviene selezionare anche l'autoradio tra i dispositivi Bluetooth.");
     }
 
     private void buildService() {
-        header("Servizio");
-        LinearLayout row = hRow();
-        row.addView(button("Riavvia servizio", new View.OnClickListener() { @Override public void onClick(View v) {
-            SwitchService.stop(MainActivity.this);
-            root.postDelayed(new Runnable() { @Override public void run() {
-                SwitchService.start(MainActivity.this, "riavvio manuale");
-                root.postDelayed(new Runnable() { @Override public void run() { build(); }}, 500);
-            }}, 500);
-        }}));
-        row.addView(button("Aggiorna", new View.OnClickListener() { @Override public void onClick(View v) { build(); }}));
-        root.addView(row);
+        section("Servizio");
+        buttons(ui.button(Ui.SECONDARY, "Riavvia servizio", R.drawable.ic_refresh, new View.OnClickListener() { @Override public void onClick(View v) {
+                    SwitchService.stop(MainActivity.this);
+                    root.postDelayed(new Runnable() { @Override public void run() {
+                        SwitchService.start(MainActivity.this, "riavvio manuale");
+                        root.postDelayed(new Runnable() { @Override public void run() { build(); }}, 500);
+                    }}, 500);
+                }}),
+                ui.button(Ui.GHOST, "Aggiorna", 0, new View.OnClickListener() { @Override public void onClick(View v) { build(); }}));
+    }
+
+    private void buildAppearance() {
+        section("Aspetto e notifiche");
+        cur.addView(ui.label("Colore principale"));
+        FlowLayout picker = ui.flow();
+        String selected = Ui.accent(prefs.accent()).id;
+        for (final Ui.Accent a : Ui.ACCENTS) {
+            picker.addView(ui.swatch(a, a.id.equals(selected), new View.OnClickListener() { @Override public void onClick(View v) {
+                prefs.setAccent(a.id);
+                build();
+            }}));
+        }
+        cur.addView(picker);
+        hint("Chiaro o scuro segue il tema del telefono.");
+        cur.addView(ui.toggle("Notifica minimizzata (niente icona in barra)", prefs.minimizedNotification(), new CompoundButton.OnCheckedChangeListener() { @Override public void onCheckedChanged(CompoundButton b, boolean on) { prefs.setMinimizedNotification(on); }}));
+    }
+
+    private void buildLog() {
+        section("Registro eventi");
+        logView = ui.text("", 12, ui.text, ui.regular);
+        logView.setLineSpacing(0, 1.5f);
+        logView.setTextIsSelectable(true);
+        logView.setBackground(ui.rect(ui.dark ? ui.bg : ui.raised, ui.border, 8));
+        logView.setPadding(ui.dp(12), ui.dp(12), ui.dp(12), ui.dp(12));
+        cur.addView(logView);
+        buttons(ui.button(Ui.DANGER, "Svuota registro", R.drawable.ic_trash, new View.OnClickListener() { @Override public void onClick(View v) { prefs.clearLog(); }}));
     }
 
     // ---- Xiaomi / HyperOS ----
@@ -356,21 +407,21 @@ public class MainActivity extends Activity {
 
     private void buildXiaomi() {
         hint("Xiaomi / HyperOS chiude le app in background: servono questi tre passaggi.");
-        hint("1. Avvio automatico: attivalo per WG Switch.");
-        root.addView(button("Apri Avvio automatico", new View.OnClickListener() { @Override public void onClick(View v) {
+        step("1. Avvio automatico: attivalo per WG Switch.");
+        buttons(ui.button(Ui.SECONDARY, "Apri Avvio automatico", R.drawable.ic_open, new View.OnClickListener() { @Override public void onClick(View v) {
             Intent i = new Intent().setComponent(new ComponentName("com.miui.securitycenter",
                     "com.miui.permcenter.autostart.AutoStartManagementActivity"));
             openOrAppDetails(i);
         }}));
-        hint("2. Risparmio batteria: scegli \"Nessuna restrizione\".");
-        root.addView(button("Apri Risparmio batteria dell'app", new View.OnClickListener() { @Override public void onClick(View v) {
+        step("2. Risparmio batteria: scegli \"Nessuna restrizione\".");
+        buttons(ui.button(Ui.SECONDARY, "Apri Risparmio batteria dell'app", R.drawable.ic_open, new View.OnClickListener() { @Override public void onClick(View v) {
             Intent i = new Intent().setComponent(new ComponentName("com.miui.powerkeeper",
                     "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"));
             i.putExtra("package_name", getPackageName());
             i.putExtra("package_label", "WG Switch");
             openOrAppDetails(i);
         }}));
-        hint("3. Nelle app recenti tieni premuta la scheda di WG Switch e tocca il lucchetto per bloccarla.");
+        step("3. Nelle app recenti tieni premuta la scheda di WG Switch e tocca il lucchetto per bloccarla.");
     }
 
     /** Apre una schermata specifica del produttore; se non esiste, apre le impostazioni dell'app. */
@@ -426,59 +477,48 @@ public class MainActivity extends Activity {
         return checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED;
     }
 
-    // ---- Widget ----
+    // ---- Composizione ----
 
-    private void permRow(String label, boolean ok, String action, View.OnClickListener onClick) {
-        LinearLayout row = hRow();
-        TextView t = text((ok ? "✓  " : "✗  ") + label, 15, false);
-        row.addView(t, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-        if (!ok && action != null) row.addView(button(action, onClick));
-        root.addView(row);
+    private void section(String title) {
+        cur = ui.card(title);
+        root.addView(cur);
     }
 
-    private void header(String s) {
-        TextView t = text(s, 17, true);
-        root.addView(t, matchWrap(dp(24)));
+    /** Riga di controllo: icona ok (teal) o da sistemare (rosa), testo e pulsante d'azione se serve. */
+    private void permRow(String label, boolean ok, String action, View.OnClickListener onClick) {
+        LinearLayout row = ui.row(12);
+        ImageView ic = ui.image(ok ? R.drawable.ic_check : R.drawable.ic_x, ok ? ui.okFg : ui.errFg, 20);
+        ic.setContentDescription(ok ? "a posto" : "da sistemare");
+        row.addView(ic);
+        row.addView(ui.body(label), weighted());
+        if (!ok && action != null) row.addView(ui.button(Ui.TONAL, action, 0, onClick));
+        row.setMinimumHeight(ui.dp(44));
+        cur.addView(row);
     }
 
     private void hint(String s) {
-        TextView t = text(s, 13, false);
-        t.setAlpha(0.7f);
-        root.addView(t, matchWrap(dp(4)));
+        cur.addView(ui.hint(s));
     }
 
-    private TextView text(String s, int sp, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(s);
-        t.setTextSize(sp);
-        if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
-        return t;
+    private void step(String s) {
+        cur.addView(ui.body(s));
     }
 
-    private Button button(String label, View.OnClickListener onClick) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setOnClickListener(onClick);
-        return b;
+    private void buttons(View... views) {
+        FlowLayout f = ui.flow();
+        for (View v : views) f.addView(v);
+        cur.addView(f);
     }
 
-    private LinearLayout hRow() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        return row;
+    private LinearLayout.LayoutParams weighted() {
+        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
     }
 
-    private LinearLayout.LayoutParams matchWrap(int topMargin) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = topMargin;
-        return lp;
-    }
-
-    private int dp(int v) {
-        return Math.round(v * getResources().getDisplayMetrics().density);
+    private android.graphics.drawable.Drawable spacer(int dp) {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setColor(0);
+        d.setSize(0, ui.dp(dp));
+        return d;
     }
 
     private void toast(String s) {
