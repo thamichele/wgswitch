@@ -37,7 +37,9 @@ pubblicare gli aggiornamenti, che Android accetta solo se firmati con la stessa 
 
 ## Pubblicare una nuova versione
 1. Aggiorna `VERSION_NAME` in `build.sh` (nuova funzione: MINORE+1; correzione: CORREZIONE+1).
-2. `KEYSTORE=... KS_PASS=... ./build.sh`
+2. `KEYSTORE=... KS_PASS=... ./build.sh`, oppure: con i secret `WGSWITCH_KEYSTORE_BASE64` (keystore in base64) e
+   `WGSWITCH_KEYSTORE_PASSWORD` nel repository, ogni push su main (o avvio manuale) produce l'APK firmato come
+   artifact `wgswitch-signed-apk` della build, dopo aver controllato che il certificato sia quello di sempre.
 3. `FDROID_KEYSTORE=... FDROID_PASS=... ./fdroid.sh build/wgswitch-X.Y.Z.apk`, poi il push del ramo `fdroid`
    indicato dallo script, e una release `vX.Y.Z` con l'APK allegato.
 

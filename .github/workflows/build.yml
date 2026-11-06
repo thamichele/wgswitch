@@ -12,6 +12,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      HAS_RELEASE_KEY: ${{ secrets.WGSWITCH_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -42,4 +44,31 @@ jobs:
         with:
           name: wgswitch-test-apk
           path: build/wgswitch-*.apk
+          if-no-files-found: error
+
+      # APK firmato con la chiave vera (la stessa di sempre, così gli aggiornamenti funzionano).
+      # Solo su main o avvio manuale, e solo se i secret WGSWITCH_KEYSTORE_BASE64 e WGSWITCH_KEYSTORE_PASSWORD esistono.
+      - name: Build signed APK
+        if: github.event_name != 'pull_request' && env.HAS_RELEASE_KEY == 'true'
+        env:
+          KS_B64: ${{ secrets.WGSWITCH_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.WGSWITCH_KEYSTORE_PASSWORD }}
+        run: |
+          export ANDROID_CLASSES="$RUNNER_TEMP/android-all-15-robolectric-13954326.jar"
+          export ANDROID_RES="$RUNNER_TEMP/android-res-33.zip"
+          export KEYSTORE="$RUNNER_TEMP/wgswitch.jks"
+          echo "$KS_B64" | base64 -d > "$KEYSTORE"
+          ./build.sh
+          # rifiuta un APK firmato con una chiave diversa: romperebbe gli aggiornamenti
+          apksigner verify --print-certs build/wgswitch-*.apk | grep -qi 'SHA-256 digest: 23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0' \
+            || { echo "Certificato diverso da quello di WG Switch" >&2; exit 1; }
+          rm -f "$KEYSTORE"
+          (cd build && sha256sum wgswitch-*.apk > "$(ls wgswitch-*.apk).sha256")
+
+      - name: Upload signed APK
+        if: github.event_name != 'pull_request' && env.HAS_RELEASE_KEY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wgswitch-signed-apk
+          path: build/wgswitch-*.apk*
           if-no-files-found: error
