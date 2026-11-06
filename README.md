@@ -22,6 +22,14 @@ si spegne, altrimenti resta acceso. La riaccensione aspetta qualche secondo (con
 5. Scrivi il nome del tunnel, prova "Test ON" / "Test OFF", poi scegli reti WiFi e autoradio.
 6. Disattiva il flow di Automate, altrimenti le due app si contendono il tunnel.
 
+## Kill switch di emergenza
+Nella sezione "Kill switch di emergenza" imposti il gateway (FQDN o IP pubblico), una porta TCP facoltativa
+(senza porta si usa il ping; con la porta basta che il gateway risponda, anche con "porta chiusa"), i secondi
+senza risposta prima della pausa e ogni quanti minuti ricontrollare. Mentre il tunnel è acceso l'app controlla
+il gateway ogni 5-30 secondi; se non risponde per il tempo impostato (e almeno 3 controlli di fila) il tunnel va
+in pausa: resta spento sopra a tutte le regole finché non tocchi "Riattiva tunnel" (app o notifica) oppure il
+ricontrollo automatico vede di nuovo il gateway. Senza internet sul telefono i controlli non contano.
+
 ## Build
 `build.sh` compila senza Gradle (aapt2, javac, dx, apksigner); GitHub Actions lo usa per verificare ogni push con
 una chiave di prova. La chiave di firma vera e la sua password non sono nel repository: servono per

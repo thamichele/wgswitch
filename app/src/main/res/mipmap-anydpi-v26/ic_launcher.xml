@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icona adattiva (specifica "Icone delle app"): fondo #1C1B1A a filo, disegno a tratto nel colore principale, 72% dell'area visibile. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launcher_bg" />
+    <foreground android:drawable="@drawable/ic_launcher_fg" />
+    <monochrome android:drawable="@drawable/ic_launcher_fg" />
+</adaptive-icon>

@@ -30,6 +30,7 @@ import android.net.wifi.WifiInfo;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,6 +46,8 @@ import java.util.Set;
 public class SwitchService extends Service {
     static final String ACTION_TOGGLE_PAUSE = "it.michele.wgswitch.TOGGLE_PAUSE";
     static final String ACTION_REEVALUATE = "it.michele.wgswitch.REEVALUATE";
+    /** Kill switch: riattiva il tunnel messo in pausa perché il gateway non rispondeva. */
+    static final String ACTION_KS_RESUME = "it.michele.wgswitch.KS_RESUME";
 
     private static final String CHANNEL = "status";
     private static final String CHANNEL_MIN = "status_min";
@@ -130,6 +133,7 @@ public class SwitchService extends Service {
         startWifi();
         startBluetooth();
         startCar();
+        handler.post(ksTick);
         prefsListener = new SharedPreferences.OnSharedPreferenceChangeListener() { @Override public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
             if (key == null || Prefs.isStateKey(key)) return;
             if (Prefs.KEY_TUNNEL.equals(key)) lastSent = null;
@@ -138,6 +142,17 @@ public class SwitchService extends Service {
                 setStatus(prefs.status());
                 return;
             }
+            if (Prefs.KEY_KS_HOST.equals(key) || Prefs.KEY_KS_PORT.equals(key) || Prefs.KEY_KS_TIMEOUT.equals(key)) {
+                ksFailSince = 0;
+                ksFails = 0;
+            }
+            if (Prefs.KEY_KS_TRIPPED.equals(key)) {
+                notifiedText = null; // aggiorna i pulsanti della notifica
+                lastSent = null;
+                ksFailSince = 0;
+                ksFails = 0;
+            }
+            if (Prefs.KEY_KS_RECHECK.equals(key) && prefs.ksTripped() != 0) scheduleNextRecheck();
             if (Prefs.KEY_PAUSED.equals(key)) {
                 notifiedText = null; // aggiorna il testo del pulsante Pausa/Riprendi
                 prefs.log(prefs.paused() ? "Automazione in pausa" : "Automazione ripresa");
@@ -158,6 +173,8 @@ public class SwitchService extends Service {
         }
         if (intent != null && ACTION_TOGGLE_PAUSE.equals(intent.getAction())) {
             prefs.setPaused(!prefs.paused());
+        } else if (intent != null && ACTION_KS_RESUME.equals(intent.getAction())) {
+            resumeFromKillSwitch("riattivazione manuale");
         } else if (intent != null && ACTION_REEVALUATE.equals(intent.getAction())) {
             lastSent = null;
             evaluate();
@@ -463,6 +480,13 @@ public class SwitchService extends Service {
             setStatus("Imposta il nome del tunnel nell'app");
             return;
         }
+        if (killSwitchTripped()) {
+            // La pausa di emergenza vince sulle regole automatiche finché non si riattiva.
+            cancelPendingUp();
+            send(false, "kill switch: gateway non raggiungibile");
+            setStatus("Tunnel in pausa · gateway non raggiungibile");
+            return;
+        }
         String reason = exceptionReason();
         if (reason != null) {
             cancelPendingUp();
@@ -473,7 +497,7 @@ public class SwitchService extends Service {
                 int delay = lastSent == null ? 3 : prefs.reenableDelaySec();
                 pendingUp = new Runnable() { @Override public void run() {
                     pendingUp = null;
-                    if (!prefs.paused() && exceptionReason() == null) {
+                    if (!prefs.paused() && !killSwitchTripped() && exceptionReason() == null) {
                         send(true, "nessuna eccezione attiva");
                         setStatus("Tunnel ON");
                     }
@@ -509,6 +533,12 @@ public class SwitchService extends Service {
         permissionWarned = false;
         WireGuard.setTunnel(this, prefs.tunnel(), up);
         lastSent = up;
+        if (up) {
+            // il tunnel appena acceso ha bisogno di qualche secondo: si ricomincia a contare da zero
+            ksFailSince = 0;
+            ksFails = 0;
+            ksUpAt = SystemClock.elapsedRealtime();
+        }
         prefs.log((up ? "Tunnel ACCESO" : "Tunnel SPENTO") + " (" + why + ")");
         scheduleVerify(up, false);
     }
@@ -542,6 +572,136 @@ public class SwitchService extends Service {
             }
         }};
         handler.postDelayed(pendingVerify, VERIFY_DELAY_S * 1000L);
+    }
+
+    // ---- Kill switch di emergenza ----
+
+    /** Primo fallimento della serie attuale (elapsedRealtime), 0 = gateway ok. */
+    private long ksFailSince;
+    /** Fallimenti consecutivi: servono anche questi, perché durante il sonno della CPU il tempo corre senza controlli. */
+    private int ksFails;
+    private long ksUpAt;
+    private boolean ksChecking;
+    private String ksSkipNote;
+    private static final int KS_MIN_FAILS = 3;
+    /** Dopo l'accensione del tunnel si aspetta l'handshake prima di contare. */
+    private static final long KS_GRACE_MS = 15000;
+
+    private boolean killSwitchTripped() {
+        return prefs.ksTripped() != 0 && !prefs.ksHost().isEmpty();
+    }
+
+    /** Intervallo tra due controlli: un terzo del tempo massimo, tra 5 e 30 secondi. */
+    private long ksIntervalMs() {
+        return Math.max(5000, Math.min(30000, prefs.ksTimeoutSec() * 1000L / 3));
+    }
+
+    private final Runnable ksTick = new Runnable() { @Override public void run() {
+        if (!running) return;
+        handler.removeCallbacks(this);
+        try {
+            ksStep();
+        } finally {
+            handler.postDelayed(this, prefs.ksTripped() != 0 ? 30000 : ksIntervalMs());
+        }
+    }};
+
+    private void ksStep() {
+        String host = prefs.ksHost();
+        if (host.isEmpty() || prefs.paused() || prefs.tunnel().isEmpty() || ksChecking) {
+            ksFailSince = 0;
+            ksFails = 0;
+            return;
+        }
+        if (prefs.ksTripped() != 0) {
+            long next = prefs.ksNext();
+            if (prefs.ksRecheckMin() > 0 && next != 0 && System.currentTimeMillis() >= next) runKsCheck(host, true);
+            return;
+        }
+        // Si controlla solo quando il tunnel deve essere acceso e WireGuard l'ha davvero acceso.
+        if (!Boolean.TRUE.equals(lastSent) || pendingUp != null || !Health.vpnActive(this)
+                || SystemClock.elapsedRealtime() - ksUpAt < KS_GRACE_MS) {
+            ksFailSince = 0;
+            ksFails = 0;
+            return;
+        }
+        runKsCheck(host, false);
+    }
+
+    private void runKsCheck(final String host, final boolean recheck) {
+        ksChecking = true;
+        final int port = prefs.ksPort();
+        new Thread(new Runnable() { @Override public void run() {
+            final String skip = Gateway.skipReason(SwitchService.this);
+            final Gateway.Result r = skip != null ? null : Gateway.check(SwitchService.this, host, port);
+            handler.post(new Runnable() { @Override public void run() {
+                ksChecking = false;
+                if (running) onKsResult(host, recheck, skip, r);
+            }});
+        }}).start();
+    }
+
+    private void onKsResult(String host, boolean recheck, String skip, Gateway.Result r) {
+        if (!host.equals(prefs.ksHost())) return; // configurazione cambiata nel frattempo
+        String time = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ITALY).format(new java.util.Date());
+        if (skip != null) {
+            // nessuna informazione sul gateway: non si conta come fallimento
+            ksFailSince = 0;
+            ksFails = 0;
+            prefs.setKsLast(time + " · controllo sospeso: " + skip);
+            if (!skip.equals(ksSkipNote)) prefs.log("Kill switch: controllo sospeso (" + skip + ")");
+            ksSkipNote = skip;
+            if (recheck) scheduleNextRecheck();
+            return;
+        }
+        ksSkipNote = null;
+        prefs.setKsLast(time + " · " + host + ": " + r.detail);
+        if (recheck) {
+            if (r.ok) {
+                resumeFromKillSwitch("ricontrollo automatico: " + r.detail);
+            } else {
+                prefs.log("Kill switch: ricontrollo, gateway ancora non raggiungibile (" + r.detail + ")");
+                scheduleNextRecheck();
+            }
+            return;
+        }
+        if (r.ok) {
+            if (ksFails > 0) prefs.log("Kill switch: il gateway risponde di nuovo (" + r.detail + ")");
+            ksFailSince = 0;
+            ksFails = 0;
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (ksFails == 0) {
+            ksFailSince = now;
+            prefs.log("Kill switch: il gateway " + host + " non risponde (" + r.detail + ")");
+        }
+        ksFails++;
+        long downSec = (now - ksFailSince) / 1000;
+        if (ksFails >= KS_MIN_FAILS && downSec >= prefs.ksTimeoutSec()) tripKillSwitch(host, downSec, r.detail);
+    }
+
+    private void tripKillSwitch(String host, long downSec, String detail) {
+        prefs.log("KILL SWITCH: " + host + " non raggiungibile da " + downSec + " s (" + detail + "), tunnel in pausa");
+        prefs.setKsTripped(System.currentTimeMillis()); // il listener rivaluta e spegne il tunnel
+        scheduleNextRecheck();
+        int min = prefs.ksRecheckMin();
+        Health.alertKillSwitch(this, "Il gateway " + host + " non risponde da " + downSec + " s: il tunnel è in pausa. "
+                + (min > 0 ? "Ricontrollo automatico ogni " + Health.minutes(min) + ", oppure riattivalo a mano."
+                : "Riattivalo a mano quando il gateway torna raggiungibile."));
+    }
+
+    private void scheduleNextRecheck() {
+        int min = prefs.ksRecheckMin();
+        prefs.setKsNext(min > 0 ? System.currentTimeMillis() + min * 60000L : 0);
+    }
+
+    private void resumeFromKillSwitch(String why) {
+        if (prefs.ksTripped() == 0) return;
+        prefs.log("Kill switch: tunnel riattivato (" + why + ")");
+        prefs.setKsNext(0);
+        prefs.setKsTripped(0); // il listener rivaluta e riaccende il tunnel
+        Health.clearKillSwitchAlert(this);
     }
 
     private void publishSnapshot() {
@@ -581,7 +741,14 @@ public class SwitchService extends Service {
                 new Intent(this, SwitchService.class).setAction(ACTION_TOGGLE_PAUSE), PendingIntent.FLAG_IMMUTABLE);
         boolean paused = prefs != null && prefs.paused();
         boolean minimized = prefs != null && prefs.minimizedNotification();
-        return new Notification.Builder(this, minimized ? CHANNEL_MIN : CHANNEL)
+        boolean tripped = prefs != null && killSwitchTripped();
+        Notification.Builder b = new Notification.Builder(this, minimized ? CHANNEL_MIN : CHANNEL);
+        if (tripped) {
+            PendingIntent resume = PendingIntent.getService(this, 3,
+                    new Intent(this, SwitchService.class).setAction(ACTION_KS_RESUME), PendingIntent.FLAG_IMMUTABLE);
+            b.addAction(new Notification.Action.Builder(null, "Riattiva tunnel", resume).build());
+        }
+        return b
                 .setSmallIcon(R.drawable.ic_stat)
                 .setColor(Ui.notificationColor(this))
                 .setContentTitle("WG Switch")
