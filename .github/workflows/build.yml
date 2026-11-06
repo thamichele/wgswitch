@@ -57,7 +57,11 @@ jobs:
           export ANDROID_CLASSES="$RUNNER_TEMP/android-all-15-robolectric-13954326.jar"
           export ANDROID_RES="$RUNNER_TEMP/android-res-33.zip"
           export KEYSTORE="$RUNNER_TEMP/wgswitch.jks"
-          echo "$KS_B64" | base64 -d > "$KEYSTORE"
+          # spazi o a capo copiati per sbaglio nei secret non devono rompere la firma
+          export KS_PASS="$(printf %s "$KS_PASS" | tr -d '\r\n')"
+          printf %s "$KS_B64" | tr -d ' \r\n' | base64 -d > "$KEYSTORE"
+          keytool -list -keystore "$KEYSTORE" -storepass "$KS_PASS" >/dev/null \
+            || { echo "Il secret WGSWITCH_KEYSTORE_PASSWORD non apre WGSWITCH_KEYSTORE_BASE64: sono di due versioni diverse?" >&2; exit 1; }
           ./build.sh
           # rifiuta un APK firmato con una chiave diversa: romperebbe gli aggiornamenti
           apksigner verify --print-certs build/wgswitch-*.apk | grep -qi 'SHA-256 digest: 23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0' \
