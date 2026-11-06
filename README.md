@@ -22,6 +22,14 @@ si spegne, altrimenti resta acceso. La riaccensione aspetta qualche secondo (con
 5. Scrivi il nome del tunnel, prova "Test ON" / "Test OFF", poi scegli reti WiFi e autoradio.
 6. Disattiva il flow di Automate, altrimenti le due app si contendono il tunnel.
 
+## Kill switch di emergenza
+Nella sezione "Kill switch di emergenza" imposti il gateway (FQDN o IP pubblico), una porta TCP facoltativa
+(senza porta si usa il ping; con la porta basta che il gateway risponda, anche con "porta chiusa"), i secondi
+senza risposta prima della pausa e ogni quanti minuti ricontrollare. Mentre il tunnel è acceso l'app controlla
+il gateway ogni 5-30 secondi; se non risponde per il tempo impostato (e almeno 3 controlli di fila) il tunnel va
+in pausa: resta spento sopra a tutte le regole finché non tocchi "Riattiva tunnel" (app o notifica) oppure il
+ricontrollo automatico vede di nuovo il gateway. Senza internet sul telefono i controlli non contano.
+
 ## Build
 `build.sh` compila senza Gradle (aapt2, javac, dx, apksigner); GitHub Actions lo usa per verificare ogni push con
 una chiave di prova. La chiave di firma vera e la sua password non sono nel repository: servono per
@@ -29,7 +37,9 @@ pubblicare gli aggiornamenti, che Android accetta solo se firmati con la stessa 
 
 ## Pubblicare una nuova versione
 1. Aggiorna `VERSION_NAME` in `build.sh` (nuova funzione: MINORE+1; correzione: CORREZIONE+1).
-2. `KEYSTORE=... KS_PASS=... ./build.sh`
+2. `KEYSTORE=... KS_PASS=... ./build.sh`, oppure: con i secret `WGSWITCH_KEYSTORE_BASE64` (keystore in base64) e
+   `WGSWITCH_KEYSTORE_PASSWORD` nel repository, ogni push su main (o avvio manuale) produce l'APK firmato come
+   artifact `wgswitch-signed-apk` della build, dopo aver controllato che il certificato sia quello di sempre.
 3. `FDROID_KEYSTORE=... FDROID_PASS=... ./fdroid.sh build/wgswitch-X.Y.Z.apk`, poi il push del ramo `fdroid`
    indicato dallo script, e una release `vX.Y.Z` con l'APK allegato.
 

@@ -3,5 +3,7 @@
     <!-- Arancio UI, tema chiaro: i colori del codice sono in Ui.java -->
     <color name="bg">#F6F4EF</color>
     <color name="accent">#A85400</color>
+    <!-- fondo dell'icona, sempre scuro (specifica "Icone delle app") -->
+    <color name="launcher_bg">#1C1B1A</color>
     <bool name="light_bars">true</bool>
 </resources>

@@ -219,6 +219,49 @@ final class Health {
         }
     }
 
+    private static final String CHANNEL_KS = "killswitch";
+    private static final int KS_ID = 3;
+
+    /** Avviso del kill switch di emergenza, con il pulsante per riattivare il tunnel. */
+    static void alertKillSwitch(Context c, String text) {
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (nm == null) return;
+        NotificationChannel ch = new NotificationChannel(CHANNEL_KS, "Kill switch di emergenza",
+                NotificationManager.IMPORTANCE_HIGH);
+        nm.createNotificationChannel(ch);
+        PendingIntent open = PendingIntent.getActivity(c, 4,
+                new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent resume = PendingIntent.getService(c, 5,
+                new Intent(c, SwitchService.class).setAction(SwitchService.ACTION_KS_RESUME), PendingIntent.FLAG_IMMUTABLE);
+        Notification n = new Notification.Builder(c, CHANNEL_KS)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setColor(Ui.notificationColor(c))
+                .setContentTitle("Tunnel in pausa: gateway non raggiungibile")
+                .setContentText(text)
+                .setStyle(new Notification.BigTextStyle().bigText(text))
+                .setContentIntent(open)
+                .addAction(new Notification.Action.Builder(null, "Riattiva tunnel", resume).build())
+                .setAutoCancel(true)
+                .build();
+        try {
+            nm.notify(KS_ID, n);
+        } catch (SecurityException ignored) {
+        }
+    }
+
+    static void clearKillSwitchAlert(Context c) {
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (nm != null) nm.cancel(KS_ID);
+    }
+
+    /** "45 min", "1 ora", "2 ore e 30 min". */
+    static String minutes(int min) {
+        if (min < 60) return min + " min";
+        int h = min / 60, m = min % 60;
+        String hs = h == 1 ? "1 ora" : h + " ore";
+        return m == 0 ? hs : hs + " e " + m + " min";
+    }
+
     static void clearAlert(Context c) {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
         if (nm != null) nm.cancel(ALERT_ID);

@@ -47,8 +47,10 @@ public class MainActivity extends Activity {
     private TextView serviceChip;
     private TextView tunnelChip;
     private TextView logView;
+    private TextView ksLastView;
     private final SharedPreferences.OnSharedPreferenceChangeListener listener = new SharedPreferences.OnSharedPreferenceChangeListener() { @Override public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
-        if (Prefs.KEY_STATUS.equals(key) || Prefs.KEY_LOG.equals(key)) runOnUiThread(new Runnable() { @Override public void run() { refreshLive(); }});
+        if (Prefs.KEY_KS_TRIPPED.equals(key)) runOnUiThread(new Runnable() { @Override public void run() { build(); }});
+        else if (Prefs.KEY_STATUS.equals(key) || Prefs.KEY_LOG.equals(key) || Prefs.KEY_KS_LAST.equals(key)) runOnUiThread(new Runnable() { @Override public void run() { refreshLive(); }});
     }};
 
     @Override
@@ -104,6 +106,7 @@ public class MainActivity extends Activity {
         buildPermissions();
         buildStandby();
         buildTunnel();
+        buildKillSwitch();
         buildWifi();
         buildBluetooth();
         buildCar();
@@ -126,6 +129,8 @@ public class MainActivity extends Activity {
             tunnelChip.setVisibility(View.GONE);
         } else if (status.startsWith("Tunnel ON")) {
             ui.styleChip(tunnelChip, "Tunnel acceso", ui.okFg, ui.okBg);
+        } else if (status.startsWith("Tunnel in pausa")) {
+            ui.styleChip(tunnelChip, "Kill switch", ui.errFg, ui.errBg);
         } else if (status.startsWith("Tunnel OFF")) {
             ui.styleChip(tunnelChip, "Eccezione attiva", ui.soft, Ui.alpha(ui.fill, 0.16f));
         } else if (status.startsWith("Riaccensione") || status.startsWith("Automazione in pausa")) {
@@ -134,6 +139,7 @@ public class MainActivity extends Activity {
             tunnelChip.setVisibility(View.GONE);
         }
         logView.setText(prefs.log().isEmpty() ? "Nessun evento" : prefs.log());
+        if (ksLastView != null) ksLastView.setText("Ultimo controllo: " + (prefs.ksLast().isEmpty() ? "nessuno" : prefs.ksLast()));
     }
 
     // ---- Sezioni ----
@@ -296,6 +302,95 @@ public class MainActivity extends Activity {
             }
         }}));
         cur.addView(ui.labeled("Ritardo prima di riaccendere il tunnel (secondi)", delayRow, null));
+    }
+
+    private void buildKillSwitch() {
+        section("Kill switch di emergenza");
+        hint("Se il gateway non risponde per il tempo impostato mentre il tunnel è acceso, il tunnel va in pausa: "
+                + "resta spento, sopra a tutte le regole, finché non lo riattivi o il ricontrollo automatico vede "
+                + "di nuovo il gateway. Lascia vuoto il gateway per disattivarlo.");
+        long tripped = prefs.ksTripped();
+        if (tripped != 0 && !prefs.ksHost().isEmpty()) {
+            String since = new java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.ITALY).format(new java.util.Date(tripped));
+            long next = prefs.ksNext();
+            String nextText = next != 0 ? "Prossimo ricontrollo automatico: "
+                    + new java.text.SimpleDateFormat("HH:mm", java.util.Locale.ITALY).format(new java.util.Date(next)) + "."
+                    : "Ricontrollo automatico disattivato: riattivalo a mano.";
+            cur.addView(ui.callout("Tunnel in pausa dal " + since, "Il gateway non rispondeva. " + nextText));
+            buttons(ui.button(Ui.PRIMARY, "Riattiva tunnel", R.drawable.ic_power, new View.OnClickListener() { @Override public void onClick(View v) {
+                startService(new Intent(MainActivity.this, SwitchService.class).setAction(SwitchService.ACTION_KS_RESUME));
+                toast("Tunnel riattivato");
+            }}));
+        }
+        final EditText host = ui.field(prefs.ksHost(), "es. vpn.miodominio.it o 203.0.113.10");
+        host.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        cur.addView(ui.labeled("Gateway (FQDN o IP pubblico)", host, null));
+        final EditText port = ui.field(prefs.ksPort() > 0 ? String.valueOf(prefs.ksPort()) : "", "vuota = ping");
+        port.setInputType(InputType.TYPE_CLASS_NUMBER);
+        cur.addView(ui.labeled("Porta TCP (facoltativa)", port,
+                "Con una porta si prova una connessione TCP, e se non va il ping. Basta che il gateway risponda, "
+                + "anche con \"porta chiusa\". WireGuard usa UDP: indica un'altra porta, es. 22 o 443."));
+        final EditText timeout = ui.field(String.valueOf(prefs.ksTimeoutSec()), "60");
+        timeout.setInputType(InputType.TYPE_CLASS_NUMBER);
+        cur.addView(ui.labeled("Secondi senza risposta prima della pausa", timeout, "Da 10 a 3600."));
+        final EditText recheck = ui.field(String.valueOf(prefs.ksRecheckMin()), "60");
+        recheck.setInputType(InputType.TYPE_CLASS_NUMBER);
+        cur.addView(ui.labeled("Ricontrollo automatico durante la pausa (minuti)", recheck,
+                "0 = solo riattivazione manuale. 60 = ogni ora."));
+        buttons(ui.button(Ui.PRIMARY, "Salva", R.drawable.ic_check, new View.OnClickListener() { @Override public void onClick(View v) {
+                    String h = host.getText().toString().trim();
+                    String clean = h.isEmpty() ? "" : Gateway.cleanHost(h);
+                    if (clean == null) {
+                        toast("Gateway non valido: scrivi solo il nome o l'IP");
+                        return;
+                    }
+                    try {
+                        String p = port.getText().toString().trim();
+                        int pv = p.isEmpty() ? 0 : Integer.parseInt(p);
+                        if (pv < 0 || pv > 65535) throw new NumberFormatException();
+                        prefs.setKillSwitch(clean, pv, Integer.parseInt(timeout.getText().toString().trim()),
+                                Integer.parseInt(recheck.getText().toString().trim()));
+                    } catch (NumberFormatException e) {
+                        toast("Numero non valido");
+                        return;
+                    }
+                    prefs.log(clean.isEmpty() ? "Kill switch disattivato" : "Kill switch: gateway " + clean
+                            + (prefs.ksPort() > 0 ? ", porta " + prefs.ksPort() : ", ping") + ", pausa dopo "
+                            + prefs.ksTimeoutSec() + " s, ricontrollo "
+                            + (prefs.ksRecheckMin() > 0 ? "ogni " + Health.minutes(prefs.ksRecheckMin()) : "solo manuale"));
+                    if (clean.isEmpty() && prefs.ksTripped() != 0) {
+                        prefs.setKsNext(0);
+                        prefs.setKsTripped(0);
+                    } else {
+                        build();
+                    }
+                    toast("Kill switch salvato");
+                }}),
+                ui.button(Ui.SECONDARY, "Prova ora", R.drawable.ic_refresh, new View.OnClickListener() { @Override public void onClick(View v) {
+                    final String h = Gateway.cleanHost(host.getText().toString());
+                    if (h == null) {
+                        toast("Scrivi il gateway");
+                        return;
+                    }
+                    int pv;
+                    try {
+                        String p = port.getText().toString().trim();
+                        pv = p.isEmpty() ? 0 : Integer.parseInt(p);
+                    } catch (NumberFormatException e) {
+                        pv = 0;
+                    }
+                    final int fp = pv;
+                    toast("Controllo " + h + "…");
+                    new Thread(new Runnable() { @Override public void run() {
+                        final Gateway.Result r = Gateway.check(getApplicationContext(), h, fp);
+                        runOnUiThread(new Runnable() { @Override public void run() {
+                            prefs.log("Prova kill switch: " + h + " " + (r.ok ? "raggiungibile" : "NON raggiungibile") + " (" + r.detail + ")");
+                            toast(r.ok ? "Raggiungibile: " + r.detail : "Non raggiungibile: " + r.detail);
+                        }});
+                    }}).start();
+                }}));
+        ksLastView = ui.hint("");
+        cur.addView(ksLastView);
     }
 
     private void buildWifi() {
