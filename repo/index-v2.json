@@ -9,12 +9,12 @@
     "icon": {
       "en-US": {
         "name": "/icons/icon.png",
-        "sha256": "017529208e4da07d8c78f3cc23b279f75b24133bf424673e152a9b8fa0d6ada4",
-        "size": 13159
+        "sha256": "63cd45166309f9fa5a60a215aed63c57be5c950609050eb84d3602ebeb529cea",
+        "size": 5579
       }
     },
     "address": "https://raw.githubusercontent.com/thamichele/wgswitch/fdroid/repo",
-    "timestamp": 1793811220000,
+    "timestamp": 1793986416000,
     "categories": {
       "Connectivity": {
         "name": {
@@ -37,7 +37,7 @@
           "System"
         ],
         "issueTracker": "https://github.com/thamichele/wgswitch/issues",
-        "lastUpdated": 1793811216000,
+        "lastUpdated": 1793986412000,
         "license": "Proprietary",
         "sourceCode": "https://github.com/thamichele/wgswitch",
         "authorName": "Michele",
@@ -52,14 +52,76 @@
         },
         "icon": {
           "en-US": {
-            "name": "/icons/it.michele.wgswitch.20302.png",
-            "sha256": "2db6171793246ffc4cde14aafcfa0e02277f46922894d7bbc9b623a018f45bd4",
-            "size": 1542
+            "name": "/icons/it.michele.wgswitch.20400.png",
+            "sha256": "82d703e4bcb2e9073ea439acfeb920e962059d10bfd41977b1d0c3a7729f99be",
+            "size": 1233
           }
         },
         "preferredSigner": "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0"
       },
       "versions": {
+        "259a9b09b4cf4bce95d069ca5ace99a7bd222567704fff93cd00a7618d171f52": {
+          "added": 1793986412000,
+          "file": {
+            "name": "/wgswitch-2.4.0.apk",
+            "sha256": "259a9b09b4cf4bce95d069ca5ace99a7bd222567704fff93cd00a7618d171f52",
+            "size": 469110
+          },
+          "manifest": {
+            "versionName": "2.4.0",
+            "versionCode": 20400,
+            "usesSdk": {
+              "minSdkVersion": 33,
+              "targetSdkVersion": 34
+            },
+            "signer": {
+              "sha256": [
+                "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0"
+              ]
+            },
+            "usesPermission": [
+              {
+                "name": "android.permission.ACCESS_NETWORK_STATE"
+              },
+              {
+                "name": "android.permission.INTERNET"
+              },
+              {
+                "name": "android.permission.ACCESS_WIFI_STATE"
+              },
+              {
+                "name": "android.permission.ACCESS_COARSE_LOCATION"
+              },
+              {
+                "name": "android.permission.ACCESS_FINE_LOCATION"
+              },
+              {
+                "name": "android.permission.ACCESS_BACKGROUND_LOCATION"
+              },
+              {
+                "name": "android.permission.BLUETOOTH_CONNECT"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE"
+              },
+              {
+                "name": "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+              },
+              {
+                "name": "android.permission.POST_NOTIFICATIONS"
+              },
+              {
+                "name": "android.permission.RECEIVE_BOOT_COMPLETED"
+              },
+              {
+                "name": "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+              },
+              {
+                "name": "com.wireguard.android.permission.CONTROL_TUNNELS"
+              }
+            ]
+          }
+        },
         "98d826a0a434e9f35325a3ec0d9f547f1ab6d6a9bebf7804fdefaec4c4e2a882": {
           "added": 1793811216000,
           "file": {
@@ -129,65 +191,6 @@
           "manifest": {
             "versionName": "2.1.1",
             "versionCode": 20101,
-            "usesSdk": {
-              "minSdkVersion": 33,
-              "targetSdkVersion": 34
-            },
-            "signer": {
-              "sha256": [
-                "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0"
-              ]
-            },
-            "usesPermission": [
-              {
-                "name": "android.permission.ACCESS_NETWORK_STATE"
-              },
-              {
-                "name": "android.permission.ACCESS_WIFI_STATE"
-              },
-              {
-                "name": "android.permission.ACCESS_COARSE_LOCATION"
-              },
-              {
-                "name": "android.permission.ACCESS_FINE_LOCATION"
-              },
-              {
-                "name": "android.permission.ACCESS_BACKGROUND_LOCATION"
-              },
-              {
-                "name": "android.permission.BLUETOOTH_CONNECT"
-              },
-              {
-                "name": "android.permission.FOREGROUND_SERVICE"
-              },
-              {
-                "name": "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
-              },
-              {
-                "name": "android.permission.POST_NOTIFICATIONS"
-              },
-              {
-                "name": "android.permission.RECEIVE_BOOT_COMPLETED"
-              },
-              {
-                "name": "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
-              },
-              {
-                "name": "com.wireguard.android.permission.CONTROL_TUNNELS"
-              }
-            ]
-          }
-        },
-        "b435d646c51e0fc217097d11dae3e3f0952daf0acba33de94552b0af66417f10": {
-          "added": 1793695177000,
-          "file": {
-            "name": "/wgswitch-2.1.0.apk",
-            "sha256": "b435d646c51e0fc217097d11dae3e3f0952daf0acba33de94552b0af66417f10",
-            "size": 54230
-          },
-          "manifest": {
-            "versionName": "2.1.0",
-            "versionCode": 20100,
             "usesSdk": {
               "minSdkVersion": 33,
               "targetSdkVersion": 34

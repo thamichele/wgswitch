@@ -1,6 +1,6 @@
 {
   "repo": {
-    "timestamp": 1793811216000,
+    "timestamp": 1793986412000,
     "version": 20002,
     "name": "My First F-Droid Archive Demo",
     "icon": "icon.png",
@@ -18,7 +18,7 @@
         "Connectivity",
         "System"
       ],
-      "suggestedVersionCode": "20000",
+      "suggestedVersionCode": "20100",
       "description": "Controlla un tunnel dell'app WireGuard ufficiale: lo spegne quando sei collegato a una delle reti WiFi\no dei dispositivi Bluetooth scelti, oppure ad Android Auto, e lo riaccende negli altri casi.\n\nRichiede l'app WireGuard con l'opzione \"Consenti app di controllo remoto\" attiva.",
       "issueTracker": "https://github.com/thamichele/wgswitch/issues",
       "license": "Proprietary",
@@ -26,13 +26,77 @@
       "sourceCode": "https://github.com/thamichele/wgswitch",
       "summary": "Spegne e riaccende il tunnel WireGuard in base a WiFi, Bluetooth e Android Auto",
       "added": 1793417393000,
-      "icon": "it.michele.wgswitch.20000.png",
+      "icon": "it.michele.wgswitch.20100.png",
       "packageName": "it.michele.wgswitch",
-      "lastUpdated": 1793811216000
+      "lastUpdated": 1793986412000
     }
   ],
   "packages": {
     "it.michele.wgswitch": [
+      {
+        "added": 1793695177000,
+        "apkName": "wgswitch-2.1.0.apk",
+        "hash": "b435d646c51e0fc217097d11dae3e3f0952daf0acba33de94552b0af66417f10",
+        "hashType": "sha256",
+        "minSdkVersion": 33,
+        "packageName": "it.michele.wgswitch",
+        "sig": "5b915cafe721845fa834569b132dbc07",
+        "signer": "23234767bec703550d705d3cd819d578832a2a1c7f9cebef15784125dac5caa0",
+        "size": 54230,
+        "targetSdkVersion": 34,
+        "uses-permission": [
+          [
+            "android.permission.ACCESS_NETWORK_STATE",
+            null
+          ],
+          [
+            "android.permission.ACCESS_WIFI_STATE",
+            null
+          ],
+          [
+            "android.permission.ACCESS_COARSE_LOCATION",
+            null
+          ],
+          [
+            "android.permission.ACCESS_FINE_LOCATION",
+            null
+          ],
+          [
+            "android.permission.ACCESS_BACKGROUND_LOCATION",
+            null
+          ],
+          [
+            "android.permission.BLUETOOTH_CONNECT",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE",
+            null
+          ],
+          [
+            "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE",
+            null
+          ],
+          [
+            "android.permission.POST_NOTIFICATIONS",
+            null
+          ],
+          [
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            null
+          ],
+          [
+            "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+            null
+          ],
+          [
+            "com.wireguard.android.permission.CONTROL_TUNNELS",
+            null
+          ]
+        ],
+        "versionCode": 20100,
+        "versionName": "2.1.0"
+      },
       {
         "added": 1793417393000,
         "apkName": "wgswitch-2.0.0.apk",
